@@ -15,3 +15,16 @@ def admin_required(view):
         return view(*args, **kwargs)
 
     return wrapped
+
+
+def client_required(view):
+    """クライアント専用の画面。管理者は入れない（403）。"""
+
+    @wraps(view)
+    @login_required
+    def wrapped(*args, **kwargs):
+        if current_user.is_admin:
+            abort(403)
+        return view(*args, **kwargs)
+
+    return wrapped

@@ -40,10 +40,19 @@ def create_app(config_name: str | None = None) -> Flask:
     register_security_headers(app)
 
     from .auth import bp as auth_bp
+    from .files import bp as files_bp
     from .main import bp as main_bp
+    from .profile import bp as profile_bp
+    from .releases import bp as releases_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(releases_bp)
+    app.register_blueprint(profile_bp)
+    app.register_blueprint(files_bp)
+
+    STATUS_LABELS = {"draft": "下書き", "pending": "承認待ち", "approved": "承認済み", "rejected": "差し戻し"}
+    app.jinja_env.filters["status_label"] = lambda status: STATUS_LABELS.get(status, status)
     return app
 
 

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "auth/_field.html" import field %}
+{% block title %}書類の入力{% endblock %}
+{% block content %}
+<h1>書類の入力</h1>
+<p>状態：{{ release.status|status_label }}　<a href="{{ url_for('releases.view', release_id=release.id) }}">プレビューへ</a></p>
+{% if release.status == 'rejected' and release.reject_reason %}
+  <p class="error">差し戻しの理由：{{ release.reject_reason }}</p>
+{% endif %}
+
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  <h2>基本情報</h2>
+  {{ field(form.title) }}
+  {{ field(form.event_at_text, placeholder="例：2026年12月1日（火）14:00〜16:00") }}
+  {{ field(form.location) }}
+
+  <h2>当日のスケジュール（任意・最大5行）</h2>
+  {% for e in form.schedule_errors %}<p class="error">{{ e }}</p>{% endfor %}
+  {% for time_text, content in schedule %}
+  <p>
+    <input type="text" name="schedule_time_{{ loop.index }}" value="{{ time_text }}" placeholder="時間（例：14:00〜14:20）" maxlength="50">
+    <input type="text" name="schedule_content_{{ loop.index }}" value="{{ content }}" placeholder="内容" maxlength="200">
+  </p>
+  {% endfor %}
+
+  <h2>サービスの内容</h2>
+  {{ field(form.service_description, rows=6) }}
+  {{ field(form.feature_1) }}
+  {{ field(form.feature_2) }}
+  {{ field(form.feature_3) }}
+
+  <h2>取材のお申し込み</h2>
+  {{ field(form.application_method, rows=3) }}
+  {{ field(form.application_deadline, placeholder="例：12月1日（月）17:00まで") }}
+
+  <h2>要旨の元になる情報（各500文字まで）</h2>
+  <p>管理者が、ここに書かれた内容をもとに、リリースの冒頭の文章（要旨）を作成します。</p>
+  {{ field(form.source_what, rows=4) }}
+  {{ field(form.source_why, rows=4) }}
+  {{ field(form.source_message, rows=4) }}
+
+  <button type="submit">保存する</button>
+</form>
+
+<h2>写真（最大{{ max_photos }}枚）</h2>
+{% for photo in release.photos %}
+  <div>
+    <img src="{{ url_for('files.photo', photo_id=photo.id) }}" alt="{{ photo.original_filename }}" style="max-width:240px">
+    <form action="{{ url_for('releases.delete_photo', release_id=release.id, photo_id=photo.id) }}" method="post" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">削除</button>
+    </form>
+  </div>
+{% endfor %}
+{% if release.photos|length < max_photos %}
+<form action="{{ url_for('releases.upload_photo', release_id=release.id) }}" method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="file" name="photo" accept="image/jpeg,image/png,image/webp">
+  <button type="submit">写真を追加</button>
+</form>
+<p>JPEG・PNG・WebP、5MBまで。</p>
+{% endif %}
+{% endblock %}

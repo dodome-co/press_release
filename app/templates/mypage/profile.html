@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% from "auth/_field.html" import field %}
+{% block title %}会員情報{% endblock %}
+{% block content %}
+<h1>会員情報</h1>
+<p>ここに登録した内容が、プレスリリースの会社概要とお問い合わせ先に使われます。</p>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  <h2>お問い合わせ先</h2>
+  {{ field(form.company_name) }}
+  {{ field(form.postal_code, placeholder="123-4567") }}
+  {{ field(form.address) }}
+  {{ field(form.department) }}
+  {{ field(form.contact_name) }}
+  {{ field(form.phone, type="tel") }}
+  {{ field(form.mobile_phone, type="tel") }}
+  <h2>会社概要</h2>
+  {{ field(form.founded, placeholder="例：2015年4月") }}
+  {{ field(form.capital, placeholder="例：1,000万円") }}
+  {{ field(form.employees, placeholder="例：25名") }}
+  {{ field(form.business_description, rows=4) }}
+  {{ field(form.website_url, placeholder="https://example.com") }}
+  <button type="submit">保存する</button>
+</form>
+
+<h2>ロゴ</h2>
+{% if current_user.logo_path %}
+  <img src="{{ url_for('files.logo', user_id=current_user.id) }}" alt="ロゴ" style="max-width:240px">
+  <form action="{{ url_for('profile.delete_logo') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit">ロゴを削除</button>
+  </form>
+{% endif %}
+<form action="{{ url_for('profile.upload_logo') }}" method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="file" name="logo" accept="image/jpeg,image/png,image/webp">
+  <button type="submit">ロゴをアップロード</button>
+</form>
+<p>JPEG・PNG・WebP、5MBまで。</p>
+{% endblock %}

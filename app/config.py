@@ -22,6 +22,14 @@ class Config:
     # リクエスト全体の大きさの上限（写真・ロゴのアップロードに備えて 16MB）
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024
 
+    # アップロードしたファイルの保存先（開発は instance/uploads。本番は VM のディスク上の専用フォルダ）
+    UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "")
+    UPLOAD_MAX_BYTES = 5 * 1024 * 1024  # 画像1枚あたり 5MB
+    UPLOAD_MAX_PIXELS = 40_000_000  # 極端に大きな画像で処理が止まるのを防ぐ（縦×横）
+
+    # 書類の入力の長さ（仕様書 F3）
+    SERVICE_DESCRIPTION_MAX_LENGTH = int(os.environ.get("SERVICE_DESCRIPTION_MAX_LENGTH", "1000"))
+
     # 認証（仕様書 F1・F1b）
     PASSWORD_MIN_LENGTH = int(os.environ.get("PASSWORD_MIN_LENGTH", "8"))
     PASSWORD_MAX_LENGTH = 128
