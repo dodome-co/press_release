@@ -54,8 +54,11 @@ def _clean_original_name(name: str | None) -> str:
     return (base or "image")[:255]
 
 
-def process_image(file_storage) -> tuple[bytes, str, str]:
-    """画像を検証し、作り直したバイト列と (content_type, 拡張子) を返す。"""
+def process_image(file_storage, require_landscape: bool = False) -> tuple[bytes, str, str]:
+    """画像を検証し、作り直したバイト列と (content_type, 拡張子) を返す。
+
+    require_landscape=True のときは、横長の画像だけを受け付ける（向きを反映したあとの縦横で判定）。
+    """
     max_bytes = current_app.config["UPLOAD_MAX_BYTES"]
     max_pixels = current_app.config["UPLOAD_MAX_PIXELS"]
 
@@ -82,6 +85,10 @@ def process_image(file_storage) -> tuple[bytes, str, str]:
         image = Image.open(io.BytesIO(raw))
         image = ImageOps.exif_transpose(image)  # 向きを反映してから、EXIF を捨てる
         image.info.pop("comment", None)  # JPEG のコメントも残さない
+        if require_landscape:
+            width_px, height_px = image.size
+            if width_px < height_px * current_app.config["PHOTO_MIN_ASPECT_RATIO"]:
+                raise UploadError("横長の写真（縦より横が長い写真）を選んでください。")
         content_type, ext = ALLOWED_FORMATS[fmt]
         out = io.BytesIO()
         if fmt == "JPEG":
@@ -98,9 +105,9 @@ def process_image(file_storage) -> tuple[bytes, str, str]:
         raise UploadError("画像として読み込めませんでした。JPEG・PNG・WebP の画像を選んでください。")
 
 
-def save_image(file_storage, subdir: str) -> SavedImage:
+def save_image(file_storage, subdir: str, require_landscape: bool = False) -> SavedImage:
     """検証した画像を UPLOAD_DIR/<subdir>/ にランダムな名前で保存する。"""
-    data, content_type, ext = process_image(file_storage)
+    data, content_type, ext = process_image(file_storage, require_landscape)
     relative = f"{subdir.strip('/')}/{secrets.token_hex(16)}.{ext}"
     path = resolve_path(relative)
     path.parent.mkdir(parents=True, exist_ok=True)

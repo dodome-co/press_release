@@ -23,7 +23,7 @@
   {{ field(form.summary, rows=8) }}
 
   <h2>書類の内容（必要なら修正）</h2>
-  {{ field(form.title) }}
+  {{ field(form.title, placeholder="全角22文字以内") }}
   {{ field(form.event_at_text) }}
   {{ field(form.location) }}
   <h3>当日のスケジュール</h3>
@@ -59,6 +59,7 @@
   <input type="file" name="photo" accept="image/jpeg,image/png,image/webp">
   <button type="submit">写真を追加</button>
 </form>
+<p>横長（縦より横が長い）の写真だけ使えます。</p>
 {% endif %}
 
 <h2>承認・差し戻し</h2>

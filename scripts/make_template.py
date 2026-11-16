@@ -10,7 +10,7 @@ from pathlib import Path
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
-from docx.shared import Pt
+from docx.shared import Mm, Pt
 
 OUT = Path(__file__).resolve().parent.parent / "templates" / "press_release.docx"
 FONT = "游ゴシック"
@@ -20,6 +20,12 @@ style = doc.styles["Normal"]
 style.font.name = FONT
 style.font.size = Pt(10.5)
 style.element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
+
+
+section = doc.sections[0]
+section.page_width, section.page_height = Mm(210), Mm(297)
+for side in ("left_margin", "right_margin", "top_margin", "bottom_margin"):
+    setattr(section, side, Mm(20))
 
 
 def para(text="", bold=False, size=None, align=None, space_after=4):
@@ -44,7 +50,7 @@ para("{{ issued_date }}", align=WD_ALIGN_PARAGRAPH.RIGHT, space_after=0)
 para("{{ company_name }}", align=WD_ALIGN_PARAGRAPH.RIGHT)
 
 para("報道関係者各位", space_after=8)
-para("【取材のお願い】{{ title }}", bold=True, size=16, space_after=8)
+para("【取材のお願い】{{ title }}", bold=True, size=15, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=8)
 para("{{ summary }}", space_after=10)
 
 para("■ 取材のご案内", bold=True, size=12, space_after=6)
@@ -78,17 +84,10 @@ para("{%p for f in features %}")
 para("・{{ f }}", space_after=0)
 para("{%p endfor %}")
 
-para("{%p if photos %}")
-para("◆ 写真", bold=True)
-para("{%p for ph in photos %}")
-para("{{ ph }}")
-para("{%p endfor %}")
-para("{%p endif %}")
-
 para("◆ 取材のお申し込み", bold=True)
 para("方法：{{ application_method }}", space_after=0)
 para("締切：{{ application_deadline }}", space_after=4)
-para("※お申し込み後にご都合が悪くなり、取材にお越しいただけなくなった場合は、お手数ですが下記のお問い合わせ先までご連絡ください。", space_after=8)
+para("※お申し込み後にご来場が難しくなった場合は、お問い合わせ先までご連絡ください。", space_after=8)
 
 para("◆ 会社概要", bold=True)
 para("{%p for row in company_rows %}")
@@ -99,6 +98,11 @@ para("◆ 本件に関するお問い合わせ先", bold=True)
 para("{{ company_name }} {{ department }}　担当：{{ contact_name }}", space_after=0)
 para("TEL：{{ phone }}{% if mobile_phone %}（携帯：{{ mobile_phone }}）{% endif %}", space_after=0)
 para("E-mail：{{ email }}", space_after=10)
+
+# 写真：文書の最後（お問い合わせ先の後ろの余白）に、横並びで置く。写真がなければ、何も出さない
+para("{%p if photos %}")
+para("{% for ph in photos %}{{ ph }}　{% endfor %}", align=WD_ALIGN_PARAGRAPH.CENTER)
+para("{%p endif %}")
 
 # フッター
 footer = doc.sections[0].footer.paragraphs[0]

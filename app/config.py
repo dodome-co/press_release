@@ -25,11 +25,15 @@ class Config:
     # アップロードしたファイルの保存先（開発は instance/uploads。本番は VM のディスク上の専用フォルダ）
     UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "")
     UPLOAD_MAX_BYTES = 5 * 1024 * 1024  # 画像1枚あたり 5MB
+    # 書類の写真は横長だけ（横÷縦がこの値以上）。ロゴには適用しない
+    PHOTO_MIN_ASPECT_RATIO = float(os.environ.get("PHOTO_MIN_ASPECT_RATIO", "1.2"))
     UPLOAD_MAX_PIXELS = 16_000_000  # 極端に大きな画像でメモリを使い切るのを防ぐ（縦×横。約4000×4000）
 
     # 下書きとして同時に持てる書類の数（提出するまでは無料枠に数えないため、増えすぎを防ぐ）
     DRAFT_LIMIT = int(os.environ.get("DRAFT_LIMIT", "3"))
     REJECT_REASON_MAX_LENGTH = 1000
+    # タイトル（「【取材のお願い】」を除く）の長さ。全角換算。Word のタイトルが2行にならない長さ
+    TITLE_MAX_WIDTH = int(os.environ.get("TITLE_MAX_WIDTH", "22"))
 
     # 書類の入力の長さ（仕様書 F3）
     SERVICE_DESCRIPTION_MAX_LENGTH = int(os.environ.get("SERVICE_DESCRIPTION_MAX_LENGTH", "1000"))

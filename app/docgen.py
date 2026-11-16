@@ -46,7 +46,7 @@ def build_context(doc: DocxTemplate, release: Release) -> dict:
             return ""
         return InlineImage(doc, str(path), width=Mm(width_mm))
 
-    photos = [image(p.file_path, 70) for p in release.photos]
+    photos = [image(p.file_path, 75) for p in release.photos]  # A4（本文の幅170mm）に2枚が横に収まる大きさ
     issued = release.approved_at
     if issued is None:
         from .models import utcnow
