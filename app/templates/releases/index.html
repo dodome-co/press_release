@@ -8,7 +8,8 @@
     <button type="submit">新しく作成する</button>
   </form>
 {% else %}
-  <p>無料で作成できる書類は{{ free_limit }}件までです。有料サービスをご利用ください。</p>
+  <p>無料で作成できる書類の枠を使い切りました。</p>
+  <p><a href="{{ url_for('orders.services') }}">「2件目以降のリリース作成」（1件分）を購入する</a></p>
 {% endif %}
 {% if releases %}
 <table border="1">
