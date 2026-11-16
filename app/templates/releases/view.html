@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}プレビュー{% endblock %}
+{% block content %}
+<h1>プレビュー</h1>
+<p>状態：{{ release.status|status_label }}</p>
+<p>※これは入力内容の確認用です。Word は、管理者の承認時に作られます。</p>
+
+{% if release.status == 'approved' %}
+  <p><a href="{{ url_for('releases.download', release_id=release.id) }}">Word をダウンロードする</a></p>
+  {% if admin_changes %}
+  <h3>管理者が修正した内容</h3>
+  <ul>
+    {% for e in admin_changes %}
+    <li>{{ field_labels.get(e.field_name, e.field_name) }}：<br>変更前：{{ e.old_value or '（なし）' }}<br>変更後：{{ e.new_value or '（なし）' }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+{% elif release.status == 'pending' %}
+  <p>承認までの目安は、{{ target_days }}営業日以内です。承認待ちの間は、編集できません。</p>
+{% elif release.status == 'rejected' and release.reject_reason %}
+  <p class="error">差し戻しの理由：{{ release.reject_reason }}</p>
+{% endif %}
+
+<h2>【取材のお願い】{{ release.title }}</h2>
+{% if release.summary %}<p>{{ release.summary }}</p>{% else %}<p>（要旨は、管理者が作成します）</p>{% endif %}
+
+<h3>日時・会場</h3>
+<ul><li>日時：{{ release.event_at_text }}</li><li>会場：{{ release.location }}</li></ul>
+
+{% if release.schedule_items %}
+<h3>当日のスケジュール</h3>
+<table border="1">
+  <tr><th>時間</th><th>内容</th></tr>
+  {% for item in release.schedule_items %}<tr><td>{{ item.time_text }}</td><td>{{ item.content }}</td></tr>{% endfor %}
+</table>
+{% endif %}
+
+<h3>サービスの内容</h3>
+<p style="white-space:pre-wrap">{{ release.service_description }}</p>
+{% if release.features %}<ul>{% for f in release.features %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
+
+{% if release.photos %}
+<h3>写真</h3>
+{% for photo in release.photos %}
+  <img src="{{ url_for('files.photo', photo_id=photo.id) }}" alt="{{ photo.original_filename }}" style="max-width:240px">
+{% endfor %}
+{% endif %}
+
+<h3>取材のお申し込み</h3>
+<ul><li>方法：{{ release.application_method }}</li><li>締切：{{ release.application_deadline }}</li></ul>
+
+<h3>要旨の元になる情報</h3>
+<p>取材してほしい内容：<br><span style="white-space:pre-wrap">{{ release.source_what }}</span></p>
+<p>なぜ今これを行うのか：<br><span style="white-space:pre-wrap">{{ release.source_why }}</span></p>
+<p>伝えたいこと：<br><span style="white-space:pre-wrap">{{ release.source_message }}</span></p>
+
+<p><a href="{{ url_for('releases.index') }}">一覧に戻る</a></p>
+{% if can_edit %}
+  <p><a href="{{ url_for('releases.edit', release_id=release.id) }}">編集する</a></p>
+  {% if missing %}
+    <p class="error">提出するには、次の項目の入力が必要です：{{ missing|join('、') }}</p>
+  {% else %}
+    <form action="{{ url_for('releases.submit', release_id=release.id) }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">提出する</button>
+    </form>
+  {% endif %}
+{% endif %}
+{% if can_delete %}
+  <form action="{{ url_for('releases.delete', release_id=release.id) }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit">下書きを削除する</button>
+  </form>
+{% endif %}
+{% endblock %}

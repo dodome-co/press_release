@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}プレスリリース{% endblock %}
+{% block content %}
+<h1>プレスリリース</h1>
+{% if can_create %}
+  <form action="{{ url_for('releases.create') }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <button type="submit">新しく作成する</button>
+  </form>
+{% else %}
+  <p>無料で作成できる書類は{{ free_limit }}件までです。有料サービスをご利用ください。</p>
+{% endif %}
+{% if releases %}
+<table border="1">
+  <tr><th>タイトル</th><th>状態</th><th>作成日</th></tr>
+  {% for r in releases %}
+  <tr>
+    <td><a href="{{ url_for('releases.view', release_id=r.id) }}">{{ r.title or '（無題）' }}</a></td>
+    <td>{{ r.status|status_label }}</td>
+    <td>{{ r.created_at.strftime('%Y-%m-%d') }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>まだ書類がありません。</p>
+{% endif %}
+{% endblock %}

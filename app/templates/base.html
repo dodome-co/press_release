@@ -6,7 +6,33 @@
   <title>{% block title %}プレスリリースサポート{% endblock %}</title>
 </head>
 <body>
-  <header><a href="{{ url_for('main.index') }}">プレスリリースサポート</a></header>
+  <header>
+    <a href="{{ url_for('main.index') }}">プレスリリースサポート</a>
+    <nav>
+      {% if current_user.is_authenticated %}
+        {% if not current_user.is_admin %}
+          <a href="{{ url_for('releases.index') }}">プレスリリース</a>
+          <a href="{{ url_for('profile.edit') }}">会員情報</a>
+        {% endif %}
+        <a href="{{ url_for('main.mypage') }}">マイページ</a>
+        {% if current_user.is_admin %}<a href="{{ url_for('main.admin_index') }}">管理者ページ</a>{% endif %}
+        <form action="{{ url_for('auth.logout') }}" method="post" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit">ログアウト</button>
+        </form>
+      {% else %}
+        <a href="{{ url_for('auth.login') }}">ログイン</a>
+        <a href="{{ url_for('auth.register') }}">会員登録</a>
+      {% endif %}
+    </nav>
+  </header>
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <ul>
+        {% for category, message in messages %}<li class="{{ category }}">{{ message }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+  {% endwith %}
   <main>{% block content %}{% endblock %}</main>
 </body>
 </html>

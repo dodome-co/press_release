@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}管理者ページ{% endblock %}
+{% block content %}
+<h1>管理者ページ</h1>
+<ul>
+  <li><a href="{{ url_for('admin.releases', status='pending') }}">承認待ちの書類</a></li>
+  <li><a href="{{ url_for('admin.releases') }}">書類の一覧（すべて）</a></li>
+</ul>
+{% endblock %}
