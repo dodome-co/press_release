@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% from "auth/_field.html" import field %}
+{% block title %}新しいパスワードの設定{% endblock %}
+{% block content %}
+<h1>新しいパスワードの設定</h1>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  {{ field(form.password, autocomplete="new-password") }}
+  {{ field(form.password_confirm, autocomplete="new-password") }}
+  <button type="submit">変更する</button>
+</form>
+{% endblock %}

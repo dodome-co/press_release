@@ -7,6 +7,8 @@
 ```bash
 uv sync                      # 依存パッケージを入れる
 cp .env.example .env         # 設定ファイルを作る（.env は Git に入れない）
+uv run flask db upgrade      # データベースを作る（初回と、マイグレーション追加後）
+uv run flask create-admin    # 管理者を作る（画面からは作れない）
 uv run flask run             # 開発サーバーを起動
 uv run pytest                # テストを実行
 ```
@@ -14,6 +16,8 @@ uv run pytest                # テストを実行
 ## 構成
 
 - `app/` … アプリ本体（Flask）。`config.py` で開発/本番/テストの設定を切り替える
+- `app/auth/` … 認証（会員登録・ログイン・パスワード再設定・アクセス制御）
+- `migrations/` … データベース変更の記録（Flask-Migrate）
 - `app/templates/` … 画面（HTML）の雛形
 - `templates/` … Word の雛形置き場（仕様書 F26。後で作成）
 - `tests/` … テスト

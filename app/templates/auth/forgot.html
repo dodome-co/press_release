@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% from "auth/_field.html" import field %}
+{% block title %}パスワード再設定{% endblock %}
+{% block content %}
+<h1>パスワード再設定</h1>
+<p>登録したメールアドレスを入力してください。再設定用のリンクをお送りします。</p>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  {{ field(form.email, type="email", autocomplete="email") }}
+  <button type="submit">送信する</button>
+</form>
+{% endblock %}
