@@ -35,8 +35,12 @@ class PasswordLength:
 
     def __call__(self, form, field):
         minimum = current_app.config["PASSWORD_MIN_LENGTH"]
-        if len(field.data or "") < minimum:
+        maximum = current_app.config["PASSWORD_MAX_LENGTH"]
+        length = len(field.data or "")
+        if length < minimum:
             raise ValidationError(f"パスワードは{minimum}文字以上にしてください。")
+        if length > maximum:
+            raise ValidationError(f"パスワードは{maximum}文字以内にしてください。")
 
 
 class RegisterForm(FlaskForm):
@@ -69,12 +73,12 @@ class RegisterForm(FlaskForm):
 
 
 class LoginForm(FlaskForm):
-    email = StringField("メールアドレス", validators=[DataRequired("入力してください。")])
-    password = PasswordField("パスワード", validators=[DataRequired("入力してください。")])
+    email = StringField("メールアドレス", validators=[DataRequired("入力してください。"), Length(max=255)])
+    password = PasswordField("パスワード", validators=[DataRequired("入力してください。"), Length(max=256)])
 
 
 class ForgotPasswordForm(FlaskForm):
-    email = StringField("登録したメールアドレス", validators=[DataRequired("入力してください。")])
+    email = StringField("登録したメールアドレス", validators=[DataRequired("入力してください。"), Length(max=255)])
 
 
 class ResetPasswordForm(FlaskForm):

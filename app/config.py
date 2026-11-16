@@ -1,5 +1,13 @@
-"""設定。開発/本番の切り替えは環境変数 APP_ENV で行う。"""
+"""設定。開発/本番の切り替えは環境変数 APP_ENV で行う。
+
+APP_ENV が未設定のときは production（安全側）として扱う。開発では .env に
+APP_ENV=development と書く（.env.example を参照）。
+"""
 import os
+
+
+def _csv(name: str) -> list[str]:
+    return [item.strip() for item in os.environ.get(name, "").split(",") if item.strip()]
 
 
 class Config:
@@ -11,9 +19,24 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
 
+    # リクエスト全体の大きさの上限（写真・ロゴのアップロードに備えて 16MB）
+    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+
     # 認証（仕様書 F1・F1b）
     PASSWORD_MIN_LENGTH = int(os.environ.get("PASSWORD_MIN_LENGTH", "8"))
+    PASSWORD_MAX_LENGTH = 128
     PASSWORD_RESET_EXPIRES_MINUTES = int(os.environ.get("PASSWORD_RESET_EXPIRES_MINUTES", "60"))
+
+    # メールに載せるリンクの土台となる URL（例：https://example.com）。
+    # 設定すると、リクエストの Host ヘッダーではなくこの値でリンクを作る。
+    BASE_URL = os.environ.get("BASE_URL", "")
+    # 許可するホスト名（カンマ区切り）。設定すると、それ以外の Host のリクエストは拒否される。
+    TRUSTED_HOSTS = _csv("TRUSTED_HOSTS") or None
+    # Nginx など、リバースプロキシの後ろで動かすとき 1 にする（実際の IP と http/https を読む）
+    PROXY_FIX = os.environ.get("PROXY_FIX", "0") == "1"
+
+    # メール送信方法。console=送らずログに出す（開発・テスト専用）。本番用は未実装（仕様書 9章）
+    MAIL_BACKEND = os.environ.get("MAIL_BACKEND", "console")
 
     # 仕様書「設定値」：コードに書き込まず設定で変えられるようにする
     FREE_RELEASE_LIMIT = int(os.environ.get("FREE_RELEASE_LIMIT", "1"))
@@ -28,11 +51,21 @@ class DevelopmentConfig(Config):
 class ProductionConfig(Config):
     DEBUG = False
     SESSION_COOKIE_SECURE = True  # HTTPS のときだけ Cookie を送る
+    PROXY_FIX = os.environ.get("PROXY_FIX", "1") == "1"  # 本番は Nginx の後ろで動かす想定
 
     @classmethod
     def validate(cls):
+        problems = []
         if cls.SECRET_KEY == "dev-only-change-me":
-            raise RuntimeError("本番では SECRET_KEY を必ず設定してください")
+            problems.append("SECRET_KEY を設定してください")
+        if not cls.BASE_URL.startswith("https://"):
+            problems.append("BASE_URL を https:// から始まる形で設定してください")
+        if not cls.TRUSTED_HOSTS:
+            problems.append("TRUSTED_HOSTS に本番のドメインを設定してください")
+        if cls.MAIL_BACKEND == "console":
+            problems.append("本番用の MAIL_BACKEND を設定してください（console は開発専用）")
+        if problems:
+            raise RuntimeError("本番の設定が足りません：" + " / ".join(problems))
 
 
 class TestingConfig(Config):

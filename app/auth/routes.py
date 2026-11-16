@@ -2,10 +2,13 @@ from urllib.parse import urljoin, urlparse
 
 from flask import current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_user, logout_user
+from sqlalchemy.exc import IntegrityError
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from ..extensions import db
 from ..mail import send_mail
-from ..models import PasswordResetToken, User
+from ..models import PasswordResetToken, User, utcnow
+from ..security import external_url
 from . import bp
 from .forms import (
     ForgotPasswordForm,
@@ -15,6 +18,17 @@ from .forms import (
     normalize_phone,
     normalize_postal_code,
 )
+
+
+# 未登録のメールでもパスワード検証と同じ時間がかかるようにするための、ダミーのハッシュ
+_DUMMY_HASH = None
+
+
+def _dummy_check(password: str) -> None:
+    global _DUMMY_HASH
+    if _DUMMY_HASH is None:
+        _DUMMY_HASH = generate_password_hash("dummy-password-for-timing")
+    check_password_hash(_DUMMY_HASH, password)
 
 
 def _is_safe_next(target: str | None) -> bool:
@@ -43,7 +57,12 @@ def register():
         )
         user.set_password(form.password.data)  # 役割は必ず client（画面から管理者は作れない）
         db.session.add(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:  # 同時に同じメールで登録されたとき
+            db.session.rollback()
+            form.email.errors.append("このメールアドレスは登録できません。別のアドレスをお試しください。")
+            return render_template("auth/register.html", form=form)
         login_user(user)
         flash("会員登録が完了しました。", "success")
         return redirect(url_for("main.index"))
@@ -57,6 +76,8 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=User.normalize_email(form.email.data)).first()
+        if user is None:
+            _dummy_check(form.password.data)  # 登録の有無が応答時間で分からないようにする
         if user is not None and user.check_password(form.password.data):
             login_user(user)
             next_url = request.args.get("next")
@@ -81,7 +102,7 @@ def forgot_password():
             minutes = current_app.config["PASSWORD_RESET_EXPIRES_MINUTES"]
             token = PasswordResetToken.issue(user, minutes)
             db.session.commit()
-            link = url_for("auth.reset_password", token=token, _external=True)
+            link = external_url("auth.reset_password", token=token)
             send_mail(
                 user.email,
                 "【プレスリリースサポート】パスワード再設定のご案内",
@@ -101,10 +122,13 @@ def reset_password(token):
         return redirect(url_for("auth.forgot_password"))
     form = ResetPasswordForm()
     if form.validate_on_submit():
-        from ..models import utcnow
-
-        row.user.set_password(form.password.data)
-        row.used_at = utcnow()
+        # 同時に2回送られても1回しか成功しないよう、「未使用なら使用済みにする」を1回の更新で行う
+        used = PasswordResetToken.query.filter_by(id=row.id, used_at=None).update({"used_at": utcnow()})
+        if used != 1:
+            db.session.rollback()
+            flash("このリンクは無効か、期限が切れています。もう一度やり直してください。", "error")
+            return redirect(url_for("auth.forgot_password"))
+        row.user.set_password(form.password.data)  # 他の端末のログインも無効になる
         db.session.commit()
         flash("パスワードを変更しました。新しいパスワードでログインしてください。", "success")
         return redirect(url_for("auth.login"))

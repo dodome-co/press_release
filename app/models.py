@@ -24,6 +24,8 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(255), nullable=False, unique=True)
     password_hash = db.Column(db.String(255), nullable=False)
+    # セッションの世代。パスワード変更時に変え、それまでのログイン状態を無効にする
+    session_nonce = db.Column(db.String(32), nullable=False, default=lambda: secrets.token_hex(16))
     role = db.Column(db.String(20), nullable=False, default=ROLE_CLIENT)
     company_name = db.Column(db.String(255), nullable=False, default="")
     postal_code = db.Column(db.String(8), nullable=False, default="")
@@ -46,6 +48,21 @@ class User(UserMixin, db.Model):
 
     def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
+        self.session_nonce = secrets.token_hex(16)  # 変更前のセッションをすべて無効にする
+
+    # ---- Flask-Login 用：セッションには「id:世代」を入れる ----
+    def get_id(self) -> str:
+        return f"{self.id}:{self.session_nonce}"
+
+    @classmethod
+    def load_from_session_id(cls, session_id: str) -> "User | None":
+        user_id, _, nonce = (session_id or "").partition(":")
+        if not user_id.isdigit() or not nonce:
+            return None
+        user = db.session.get(cls, int(user_id))
+        if user is None or not secrets.compare_digest(user.session_nonce, nonce):
+            return None
+        return user
 
     def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
