@@ -57,9 +57,13 @@ def edit(release_id):
     schedule = [(i.time_text, i.content) for i in release.schedule_items]
     if request.method == "POST":
         if form.validate_on_submit():
-            service.update_fields(release, _form_values(form))
-            service.replace_schedule(release, form.schedule_rows())
-            db.session.commit()
+            try:
+                service.update_fields(release, _form_values(form))
+                service.replace_schedule(release, form.schedule_rows())
+                db.session.commit()
+            except service.ReleaseError as e:  # 保存の直前に、管理者の操作などで状態が変わったとき
+                flash(str(e), "error")
+                return redirect(url_for("releases.view", release_id=release.id))
             flash("保存しました。", "success")
             return redirect(url_for("releases.edit", release_id=release.id))
         schedule = form.schedule_rows()

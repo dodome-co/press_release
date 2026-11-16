@@ -15,6 +15,7 @@ from flask import current_app
 
 from . import uploads
 from .models import Release
+from .textutil import clean_text
 
 TEMPLATE_NAME = "press_release.docx"
 
@@ -88,13 +89,28 @@ def build_context(doc: DocxTemplate, release: Release) -> dict:
     }
 
 
+def _sanitize(value):
+    """差し込む文字列から、Word（XML）に入れられない制御文字を取り除く（念のための最後の確認）。
+
+    1つでも残っていると、docxtpl は書類全体の & < > を黙って消してしまう。
+    """
+    if isinstance(value, str):
+        return clean_text(value)
+    if isinstance(value, list):
+        return [_sanitize(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _sanitize(v) for k, v in value.items()}
+    return value  # 画像（InlineImage）など
+
+
 def render_release(release: Release) -> bytes:
     """Word ファイルの中身を作って返す（保存はしない）。"""
     path = template_path()
     if not path.is_file():
         raise FileNotFoundError(f"Word の雛形が見つかりません：{path}")
     doc = DocxTemplate(str(path))
-    doc.render(build_context(doc, release), autoescape=True)  # &・< などが XML を壊さないように
+    context = _sanitize(build_context(doc, release))
+    doc.render(context, autoescape=True)  # &・< などが XML を壊さないように
     buffer = io.BytesIO()
     doc.save(buffer)
     return buffer.getvalue()

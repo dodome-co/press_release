@@ -8,6 +8,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from ..extensions import db
 from ..mail import send_mail
 from ..models import PasswordResetToken, User, utcnow
+from ..textutil import clean_text
 from ..security import external_url
 from . import bp
 from .forms import (
@@ -48,10 +49,10 @@ def register():
     if form.validate_on_submit():
         user = User(
             email=User.normalize_email(form.email.data),
-            company_name=form.company_name.data.strip(),
+            company_name=clean_text(form.company_name.data),
             postal_code=normalize_postal_code(form.postal_code.data),
-            address=form.address.data.strip(),
-            contact_name=form.contact_name.data.strip(),
+            address=clean_text(form.address.data),
+            contact_name=clean_text(form.contact_name.data),
             phone=normalize_phone(form.phone.data),
             mobile_phone=normalize_phone(form.mobile_phone.data) if form.mobile_phone.data else None,
         )
@@ -103,12 +104,16 @@ def forgot_password():
             token = PasswordResetToken.issue(user, minutes)
             db.session.commit()
             link = external_url("auth.reset_password", token=token)
-            send_mail(
-                user.email,
-                "【プレスリリースサポート】パスワード再設定のご案内",
-                f"次のリンクから、{minutes}分以内に新しいパスワードを設定してください。\n"
-                f"{link}\n\nお心当たりがない場合は、このメールを破棄してください。",
-            )
+            try:
+                send_mail(
+                    user.email,
+                    "【プレスリリースサポート】パスワード再設定のご案内",
+                    f"次のリンクから、{minutes}分以内に新しいパスワードを設定してください。\n"
+                    f"{link}\n\nお心当たりがない場合は、このメールを破棄してください。",
+                )
+            except Exception:
+                # 送れなかった場合も、画面は同じにする（登録の有無を知られないように）
+                current_app.logger.exception("パスワード再設定メールの送信に失敗しました")
         # 登録の有無が分からないよう、結果にかかわらず同じ画面・同じ文言にする
         return render_template("auth/forgot_sent.html")
     return render_template("auth/forgot.html", form=form)

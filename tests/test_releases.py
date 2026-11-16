@@ -207,7 +207,10 @@ def test_other_user_cannot_fetch_photo_but_admin_can(client, logged_in, app):
     admin = app.test_client()
     make_user(email="admin@example.com", role="admin")
     login(admin, "admin@example.com")
-    assert admin.get(f"/files/photos/{photo_id}").status_code == 200
+    assert admin.get(f"/files/photos/{photo_id}").status_code == 404  # 下書きは、管理者にも見せない
+    release.status = "pending"
+    db.session.commit()
+    assert admin.get(f"/files/photos/{photo_id}").status_code == 200  # 提出されたら見られる
 
 
 def test_photo_requires_login(app, client, logged_in):

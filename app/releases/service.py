@@ -4,9 +4,12 @@
 抜け道ができるのを防ぐ。
 """
 from flask import current_app
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 
 from .. import uploads
 from ..extensions import db
+from ..textutil import clean_text
 from ..models import (
     MAX_PHOTOS,
     RELEASE_APPROVED,
@@ -17,6 +20,7 @@ from ..models import (
     ReleaseEdit,
     ReleasePhoto,
     ReleaseScheduleItem,
+    User,
     utcnow,
 )
 
@@ -48,12 +52,56 @@ CLIENT_FIELDS = (
 )
 
 
+# ---- 排他（同時の操作で状態が食い違わないようにする） ----
+EDITABLE = (RELEASE_DRAFT, RELEASE_REJECTED)  # クライアントが編集できる状態
+PENDING = (RELEASE_PENDING,)  # 管理者が操作できる状態
+
+
+def _fail(message: str):
+    """途中の変更とロックを捨てて、利用者向けのエラーにする。"""
+    db.session.rollback()
+    raise ReleaseError(message)
+
+
+def _lock(release: Release, allowed_statuses: tuple, message: str) -> None:
+    """書類の行をロックし、状態が期待どおりかを確認して、最新の内容を読み直す。
+
+    「状態が allowed のときだけ更新する」という1回の UPDATE で行うので、同時に来た
+    別の操作（提出と編集、承認と承認など）は、先の操作が終わるまで待たされる。
+    """
+    rows = db.session.execute(
+        update(Release)
+        .where(Release.id == release.id, Release.status.in_(allowed_statuses))
+        .values(updated_at=utcnow())
+    ).rowcount
+    if rows != 1:
+        _fail(message)
+    db.session.refresh(release)
+
+
+def _lock_user(user_id: int) -> None:
+    """ユーザーの行をロックする。同じ人の無料枠の確認が、同時に走らないようにする。"""
+    db.session.execute(update(User).where(User.id == user_id).values(updated_at=utcnow()))
+
+
+def _lock_editable(release: Release) -> None:
+    _lock(release, EDITABLE, "この書類は、いまは編集できません。")
+
+
+def _lock_pending(release: Release) -> None:
+    _lock(release, PENDING, "承認待ちの書類だけ、この操作ができます。")
+
+
 # ---- 無料枠 ----
 def count_first_submitted(user_id: int) -> int:
     """初めて提出した書類の数（無料枠の数え方）。差し戻し後の再提出は数えない。"""
     return Release.query.filter(
         Release.user_id == user_id, Release.first_submitted_at.isnot(None)
     ).count()
+
+
+def count_drafts(user_id: int) -> int:
+    return Release.query.filter_by(user_id=user_id, status=RELEASE_DRAFT).count()
 
 
 def free_limit() -> int:
@@ -64,10 +112,10 @@ def can_create(user) -> bool:
     return count_first_submitted(user.id) < free_limit()
 
 
-# ---- 編集できるか ----
+# ---- 編集できるか（画面の表示用。実際の更新時は、上の _lock で改めて確認する） ----
 def client_can_edit(release: Release) -> bool:
     """クライアントが編集できるのは、下書きと差し戻しのときだけ。"""
-    return release.status in (RELEASE_DRAFT, RELEASE_REJECTED)
+    return release.status in EDITABLE
 
 
 def client_can_delete(release: Release) -> bool:
@@ -75,17 +123,14 @@ def client_can_delete(release: Release) -> bool:
     return release.status == RELEASE_DRAFT
 
 
-def _ensure_editable(release: Release) -> None:
-    if not client_can_edit(release):
-        raise ReleaseError("この書類は、いまは編集できません。")
-
-
 # ---- 作成・更新・削除 ----
 def create_draft(user) -> Release:
+    _lock_user(user.id)
     if not can_create(user):
-        raise ReleaseError(
-            f"無料で作成できる書類は{free_limit()}件までです。有料サービスをご利用ください。"
-        )
+        _fail(f"無料で作成できる書類は{free_limit()}件までです。有料サービスをご利用ください。")
+    limit = current_app.config["DRAFT_LIMIT"]
+    if count_drafts(user.id) >= limit:
+        _fail(f"下書きは{limit}件までです。不要な下書きを削除するか、提出してください。")
     release = Release(user_id=user.id)
     db.session.add(release)
     db.session.commit()
@@ -93,17 +138,18 @@ def create_draft(user) -> Release:
 
 
 def update_fields(release: Release, values: dict) -> None:
-    """入力項目を更新する（クライアント用）。値は前後の空白を取る。"""
-    _ensure_editable(release)
+    """入力項目を更新する（クライアント用）。画面の保存処理が commit する。"""
+    _lock_editable(release)
     for name in CLIENT_FIELDS:
         if name in values:
-            setattr(release, name, (values[name] or "").strip().replace("\r\n", "\n"))
+            setattr(release, name, clean_text(values[name]))
 
 
 def replace_schedule(release: Release, rows: list[tuple[str, str]]) -> None:
     """当日のスケジュールを入れ替える。空の行は除き、最大5行。"""
-    _ensure_editable(release)
-    cleaned = [(t.strip(), c.strip()) for t, c in rows if t.strip() or c.strip()]
+    _lock_editable(release)
+    cleaned = [(clean_text(t), clean_text(c)) for t, c in rows]
+    cleaned = [(t, c) for t, c in cleaned if t or c]
     release.schedule_items.clear()
     db.session.flush()
     for position, (time_text, content) in enumerate(cleaned, start=1):
@@ -112,16 +158,21 @@ def replace_schedule(release: Release, rows: list[tuple[str, str]]) -> None:
         )
 
 
-def add_photo(release: Release, file_storage) -> ReleasePhoto:
-    _ensure_editable(release)
+def _free_position(release: Release) -> int:
     used = {p.position for p in release.photos}
     free = [pos for pos in range(1, MAX_PHOTOS + 1) if pos not in used]
     if not free:
-        raise ReleaseError(f"写真は{MAX_PHOTOS}枚までです。")
+        _fail(f"写真は{MAX_PHOTOS}枚までです。")
+    return free[0]
+
+
+def _store_photo(release: Release, file_storage) -> ReleasePhoto:
+    """写真を保存して、DB に足す（commit は呼び出し側）。DB に残らないファイルは消す。"""
+    position = _free_position(release)
     saved = uploads.save_image(file_storage, f"releases/{release.id}/photos")
     photo = ReleasePhoto(
         release_id=release.id,
-        position=free[0],
+        position=position,
         file_path=saved.relative_path,
         original_filename=saved.original_filename,
         content_type=saved.content_type,
@@ -129,16 +180,27 @@ def add_photo(release: Release, file_storage) -> ReleasePhoto:
     )
     db.session.add(photo)
     try:
+        db.session.flush()
+    except IntegrityError:
+        uploads.delete_file(saved.relative_path)
+        _fail("写真を追加できませんでした。もう一度お試しください。")
+    return photo
+
+
+def add_photo(release: Release, file_storage) -> ReleasePhoto:
+    _lock_editable(release)
+    photo = _store_photo(release, file_storage)
+    try:
         db.session.commit()
     except Exception:
         db.session.rollback()
-        uploads.delete_file(saved.relative_path)  # DB に残らないファイルは消す
+        uploads.delete_file(photo.file_path)
         raise
     return photo
 
 
 def delete_photo(release: Release, photo: ReleasePhoto) -> None:
-    _ensure_editable(release)
+    _lock_editable(release)
     path = photo.file_path
     db.session.delete(photo)
     db.session.commit()
@@ -146,8 +208,7 @@ def delete_photo(release: Release, photo: ReleasePhoto) -> None:
 
 
 def delete_draft(release: Release) -> None:
-    if not client_can_delete(release):
-        raise ReleaseError("提出済みの書類は削除できません。")
+    _lock(release, (RELEASE_DRAFT,), "提出済みの書類は削除できません。")
     paths = [p.file_path for p in release.photos]
     db.session.delete(release)
     db.session.commit()
@@ -162,15 +223,15 @@ def missing_required(release: Release) -> list[str]:
 
 def submit(release: Release) -> None:
     """承認待ちにする。必須項目と無料枠を確認する。"""
-    _ensure_editable(release)
+    _lock_editable(release)
     missing = missing_required(release)
     if missing:
-        raise ReleaseError("次の項目を入力してください：" + "、".join(missing))
+        _fail("次の項目を入力してください：" + "、".join(missing))
     first_time = release.first_submitted_at is None
-    if first_time and not can_create(release.user):
-        raise ReleaseError(
-            f"無料で提出できる書類は{free_limit()}件までです。有料サービスをご利用ください。"
-        )
+    if first_time:
+        _lock_user(release.user_id)  # 同じ人の2件が同時に提出されても、1件ずつ確認する
+        if not can_create(release.user):
+            _fail(f"無料で提出できる書類は{free_limit()}件までです。有料サービスをご利用ください。")
     now = utcnow()
     if first_time:
         release.first_submitted_at = now  # 一度入れたら変えない
@@ -189,11 +250,6 @@ FIELD_LABELS = {**REQUIRED_FOR_SUBMIT, "feature_2": "特徴2", "feature_3": "特
                 "schedule": "当日のスケジュール", "photos": "写真"}
 
 
-def _ensure_pending(release: Release) -> None:
-    if release.status != RELEASE_PENDING:
-        raise ReleaseError("承認待ちの書類だけ、この操作ができます。")
-
-
 def _schedule_text(items) -> str:
     return "\n".join(f"{i.time_text} {i.content}" for i in items)
 
@@ -208,7 +264,7 @@ def _record_edit(release: Release, admin, field: str, old: str | None, new: str 
 
 def admin_update(release: Release, admin, values: dict, schedule_rows: list[tuple[str, str]], summary: str) -> list[str]:
     """管理者が書類を編集する。変わった項目だけを編集履歴に残し、変えた項目名の一覧を返す。"""
-    _ensure_pending(release)
+    _lock_pending(release)
     changed: list[str] = []
 
     def apply(field: str, new_value: str) -> None:
@@ -220,11 +276,12 @@ def admin_update(release: Release, admin, values: dict, schedule_rows: list[tupl
 
     for name in ADMIN_FIELDS:
         if name in values:
-            apply(name, (values[name] or "").strip().replace("\r\n", "\n"))
-    apply("summary", (summary or "").strip().replace("\r\n", "\n"))
+            apply(name, clean_text(values[name]))
+    apply("summary", clean_text(summary))
 
     old_schedule = _schedule_text(release.schedule_items)
-    cleaned = [(t.strip(), c.strip()) for t, c in schedule_rows if t.strip() or c.strip()]
+    cleaned = [(clean_text(t), clean_text(c)) for t, c in schedule_rows]
+    cleaned = [(t, c) for t, c in cleaned if t or c]
     new_schedule = "\n".join(f"{t} {c}" for t, c in cleaned)
     if old_schedule != new_schedule:
         _record_edit(release, admin, "schedule", old_schedule, new_schedule)
@@ -242,31 +299,21 @@ def admin_update(release: Release, admin, values: dict, schedule_rows: list[tupl
 
 
 def admin_add_photo(release: Release, admin, file_storage) -> ReleasePhoto:
-    _ensure_pending(release)
-    used = {p.position for p in release.photos}
-    free = [pos for pos in range(1, MAX_PHOTOS + 1) if pos not in used]
-    if not free:
-        raise ReleaseError(f"写真は{MAX_PHOTOS}枚までです。")
-    saved = uploads.save_image(file_storage, f"releases/{release.id}/photos")
-    photo = ReleasePhoto(
-        release_id=release.id, position=free[0], file_path=saved.relative_path,
-        original_filename=saved.original_filename, content_type=saved.content_type,
-        size_bytes=saved.size_bytes,
-    )
-    db.session.add(photo)
-    _record_edit(release, admin, "photos", "", f"追加：{saved.original_filename}")
+    _lock_pending(release)
+    photo = _store_photo(release, file_storage)
+    _record_edit(release, admin, "photos", "", f"追加：{photo.original_filename}")
     release.last_edited_by, release.last_edited_at = admin.id, utcnow()
     try:
         db.session.commit()
     except Exception:
         db.session.rollback()
-        uploads.delete_file(saved.relative_path)
+        uploads.delete_file(photo.file_path)
         raise
     return photo
 
 
 def admin_delete_photo(release: Release, admin, photo: ReleasePhoto) -> None:
-    _ensure_pending(release)
+    _lock_pending(release)
     path, name = photo.file_path, photo.original_filename
     db.session.delete(photo)
     _record_edit(release, admin, "photos", f"削除：{name}", "")
@@ -279,18 +326,17 @@ def approve(release: Release, admin) -> None:
     """承認する。要旨が空だと承認できない。承認と Word の出力は、まとめて成功か失敗かにする。"""
     from .. import docgen
 
-    _ensure_pending(release)
+    _lock_pending(release)  # 同時に承認・差し戻しが来ても、1つだけが通る
     if not (release.summary or "").strip():
-        raise ReleaseError("要旨（前文）を入力してから承認してください。")
+        _fail("要旨（前文）を入力してから承認してください。")
     missing = missing_required(release)
     if missing:
-        raise ReleaseError("次の項目が空です：" + "、".join(missing))
+        _fail("次の項目が空です：" + "、".join(missing))
 
-    now = utcnow()
     relative_path = None
     try:
         release.approved_by = admin.id
-        release.approved_at = now
+        release.approved_at = utcnow()
         release.status = RELEASE_APPROVED
         relative_path = docgen.write_release(release)  # 失敗したら、下で全部元に戻す
         release.file_path = relative_path
@@ -298,17 +344,18 @@ def approve(release: Release, admin) -> None:
     except Exception as e:
         db.session.rollback()
         uploads.delete_file(relative_path)
-        if isinstance(e, ReleaseError):
-            raise
         current_app.logger.exception("Word の出力に失敗したため、承認を取り消しました（書類ID=%s）", release.id)
         raise ReleaseError("Word の出力に失敗したため、承認できませんでした。もう一度お試しください。") from e
 
 
 def reject(release: Release, admin, reason: str) -> None:
-    _ensure_pending(release)
-    reason = (reason or "").strip()
+    reason = clean_text(reason)
     if not reason:
         raise ReleaseError("差し戻しの理由を入力してください。")
+    limit = current_app.config["REJECT_REASON_MAX_LENGTH"]
+    if len(reason) > limit:
+        raise ReleaseError(f"差し戻しの理由は{limit}文字以内にしてください。")
+    _lock_pending(release)
     release.status = RELEASE_REJECTED
     release.reject_reason = reason
     db.session.commit()

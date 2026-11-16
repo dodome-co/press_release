@@ -81,6 +81,7 @@ def process_image(file_storage) -> tuple[bytes, str, str]:
 
         image = Image.open(io.BytesIO(raw))
         image = ImageOps.exif_transpose(image)  # 向きを反映してから、EXIF を捨てる
+        image.info.pop("comment", None)  # JPEG のコメントも残さない
         content_type, ext = ALLOWED_FORMATS[fmt]
         out = io.BytesIO()
         if fmt == "JPEG":

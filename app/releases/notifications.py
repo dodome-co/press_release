@@ -1,15 +1,25 @@
 """書類に関するメール通知（開発ではログに出る。本番の送信方法は未決）。"""
+from flask import current_app
+
 from ..mail import send_mail
 from ..models import ROLE_ADMIN, Release, User
 from ..security import external_url
 from .service import FIELD_LABELS
 
 
+def _send(to: str, subject: str, body: str) -> None:
+    """メールの送信に失敗しても、書類の状態の変更（すでに完了している）を巻き戻さない。"""
+    try:
+        send_mail(to, subject, body)
+    except Exception:
+        current_app.logger.exception("メールの送信に失敗しました（件名=%s）", subject)
+
+
 def notify_submitted(release: Release) -> None:
     """承認待ちが出たことを、管理者全員に知らせる（F25）。"""
     link = external_url("admin.release_detail", release_id=release.id)
     for admin in User.query.filter_by(role=ROLE_ADMIN).all():
-        send_mail(
+        _send(
             admin.email,
             "【プレスリリースサポート】承認待ちの書類が提出されました",
             f"{release.user.company_name} から、承認待ちの書類が提出されました。\n"
@@ -37,13 +47,13 @@ def notify_approved(release: Release) -> None:
     changes = _changes_text(release)
     if changes:
         body += f"\n管理者が、次の内容を修正しました。\n{changes}\n"
-    send_mail(release.user.email, "【プレスリリースサポート】書類が承認されました", body)
+    _send(release.user.email, "【プレスリリースサポート】書類が承認されました", body)
 
 
 def notify_rejected(release: Release) -> None:
     """差し戻したことと、その理由を、クライアントに知らせる（F23）。"""
     link = external_url("releases.edit", release_id=release.id)
-    send_mail(
+    _send(
         release.user.email,
         "【プレスリリースサポート】書類が差し戻されました",
         f"「{release.title}」が差し戻されました。\n\n理由：\n{release.reject_reason}\n\n"

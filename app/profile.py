@@ -9,6 +9,7 @@ from . import uploads
 from .auth.decorators import client_required
 from .auth.forms import normalize_phone, normalize_postal_code
 from .extensions import db
+from .textutil import clean_text
 
 bp = Blueprint("profile", __name__, url_prefix="/mypage")
 
@@ -47,7 +48,7 @@ class ProfileForm(FlaskForm):
 
 
 def _blank_to_none(value):
-    value = (value or "").strip()
+    value = clean_text(value)
     return value or None
 
 
@@ -57,11 +58,11 @@ def edit():
     form = ProfileForm(obj=current_user if request.method == "GET" else None)
     if form.validate_on_submit():
         u = current_user
-        u.company_name = form.company_name.data.strip()
+        u.company_name = clean_text(form.company_name.data)
         u.postal_code = normalize_postal_code(form.postal_code.data)
-        u.address = form.address.data.strip()
+        u.address = clean_text(form.address.data)
         u.department = _blank_to_none(form.department.data)
-        u.contact_name = form.contact_name.data.strip()
+        u.contact_name = clean_text(form.contact_name.data)
         u.phone = normalize_phone(form.phone.data)
         u.mobile_phone = normalize_phone(form.mobile_phone.data) if form.mobile_phone.data else None
         u.founded = _blank_to_none(form.founded.data)

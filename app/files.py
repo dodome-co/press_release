@@ -31,7 +31,11 @@ def photo(photo_id):
     photo = db.session.get(ReleasePhoto, photo_id)
     if photo is None:
         abort(404)
-    if not current_user.is_admin and photo.release.user_id != current_user.id:
+    release = photo.release
+    if current_user.is_admin:
+        if release.status == "draft":
+            abort(404)  # 下書きは、提出されるまで管理者にも見せない
+    elif release.user_id != current_user.id:
         abort(404)  # 他人のファイルは、存在の有無も分からないようにする
     return _send(photo.file_path, photo.content_type)
 
