@@ -4,6 +4,7 @@ from wtforms import StringField, TextAreaField
 from wtforms.validators import Length, ValidationError
 
 from ..models import MAX_SCHEDULE_ITEMS
+from ..textutil import clean_text, display_width
 
 
 class _MaxLength:
@@ -18,10 +19,18 @@ class _MaxLength:
             raise ValidationError(f"{limit}文字以内で入力してください。")
 
 
+def title_length_error(title: str | None) -> str | None:
+    """タイトルが長すぎるときのメッセージ（問題なければ None）。"""
+    limit = current_app.config["TITLE_MAX_WIDTH"]
+    if display_width(clean_text(title)) > limit:
+        return f"タイトルは全角{limit}文字以内で入力してください（半角は2文字で全角1文字として数えます）。"
+    return None
+
+
 class ReleaseForm(FlaskForm):
     """書類の入力。下書きとして保存するときは、空の項目があってもよい（提出時に確認する）。"""
 
-    title = StringField("タイトル", validators=[Length(max=200)])
+    title = StringField("タイトル（「【取材のお願い】」に続く部分）", validators=[Length(max=200)])
     event_at_text = StringField("日時", validators=[Length(max=200)])
     location = StringField("場所", validators=[Length(max=300)])
     service_description = TextAreaField("サービスや商品の概要", validators=[_MaxLength("SERVICE_DESCRIPTION_MAX_LENGTH")])
@@ -33,6 +42,11 @@ class ReleaseForm(FlaskForm):
     source_what = TextAreaField("取材してほしい内容", validators=[_MaxLength("INPUT_MAX_LENGTH")])
     source_why = TextAreaField("なぜ今これを行うのか（社会的意義・背景）", validators=[_MaxLength("INPUT_MAX_LENGTH")])
     source_message = TextAreaField("読者・報道関係者に伝えたいこと", validators=[_MaxLength("INPUT_MAX_LENGTH")])
+
+    def validate_title(self, field):
+        message = title_length_error(field.data)
+        if message:
+            raise ValidationError(message)
 
     def schedule_rows(self) -> list[tuple[str, str]]:
         return [

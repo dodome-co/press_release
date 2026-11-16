@@ -137,9 +137,19 @@ def create_draft(user) -> Release:
     return release
 
 
+def _check_title(title: str | None) -> None:
+    from .forms import title_length_error
+
+    message = title_length_error(title)
+    if message:
+        _fail(message)
+
+
 def update_fields(release: Release, values: dict) -> None:
     """入力項目を更新する（クライアント用）。画面の保存処理が commit する。"""
     _lock_editable(release)
+    if "title" in values:
+        _check_title(values["title"])
     for name in CLIENT_FIELDS:
         if name in values:
             setattr(release, name, clean_text(values[name]))
@@ -169,7 +179,7 @@ def _free_position(release: Release) -> int:
 def _store_photo(release: Release, file_storage) -> ReleasePhoto:
     """写真を保存して、DB に足す（commit は呼び出し側）。DB に残らないファイルは消す。"""
     position = _free_position(release)
-    saved = uploads.save_image(file_storage, f"releases/{release.id}/photos")
+    saved = uploads.save_image(file_storage, f"releases/{release.id}/photos", require_landscape=True)
     photo = ReleasePhoto(
         release_id=release.id,
         position=position,
@@ -265,6 +275,8 @@ def _record_edit(release: Release, admin, field: str, old: str | None, new: str 
 def admin_update(release: Release, admin, values: dict, schedule_rows: list[tuple[str, str]], summary: str) -> list[str]:
     """管理者が書類を編集する。変わった項目だけを編集履歴に残し、変えた項目名の一覧を返す。"""
     _lock_pending(release)
+    if "title" in values:
+        _check_title(values["title"])
     changed: list[str] = []
 
     def apply(field: str, new_value: str) -> None:

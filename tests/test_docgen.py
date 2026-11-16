@@ -42,7 +42,7 @@ def test_basic_fields_are_filled(app, client_user):
     text = _text(_doc(_release(client_user)))
     for expected in ("報道関係者各位", f"【取材のお願い】{FULL['title']}", "要旨です。", FULL["event_at_text"],
                      FULL["location"], FULL["service_description"], "・速い", FULL["application_method"],
-                     FULL["application_deadline"], "お問い合わせ先までご連絡ください", "株式会社テスト",
+                     FULL["application_deadline"], "ご来場が難しくなった場合は、お問い合わせ先までご連絡ください", "株式会社テスト",
                      "〒123-4567 東京都千代田区1-1-1", "TEL：03-1234-5678", "E-mail：client@example.com"):
         assert expected in text, expected
 
@@ -92,7 +92,7 @@ def test_photos_and_logo_are_embedded(app, client_user):
     db.session.commit()
     doc = _doc(r)
     assert len(doc.inline_shapes) == 3  # 写真2枚 + ロゴ1枚
-    assert "◆ 写真" in _text(doc)
+    assert "◆ 写真" not in _text(doc)  # 写真は、見出しなしで最後の余白に置く
 
 
 def test_missing_photo_file_is_skipped_not_fatal(app, client_user):
@@ -146,3 +146,51 @@ def test_xml_special_characters_do_not_corrupt_file(app, client_user):
     doc = _doc(r)  # 開けること自体が確認
     text = _text(doc)
     assert "</w:t></w:p><w:p>壊れる？" in text and "&amp; <b>太字</b>" in text
+
+
+def test_title_is_centered(app, client_user):
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    doc = _doc(_release(client_user))
+    title = next(p for p in doc.paragraphs if p.text.startswith("【取材のお願い】"))
+    assert title.alignment == WD_ALIGN_PARAGRAPH.CENTER
+
+
+def _drawings_per_paragraph(doc):
+    from docx.oxml.ns import qn
+
+    return [len(p._p.findall(".//" + qn("w:drawing"))) for p in doc.paragraphs]
+
+
+def test_photos_sit_side_by_side_at_the_end(app, client_user):
+    r = _release(client_user)
+    for pos in (1, 2):
+        saved = save_image(_storage(), f"releases/{r.id}/photos")
+        db.session.add(ReleasePhoto(release_id=r.id, position=pos, file_path=saved.relative_path,
+                                    original_filename="p.png", content_type=saved.content_type,
+                                    size_bytes=saved.size_bytes))
+    db.session.commit()
+    doc = _doc(r)
+    counts = _drawings_per_paragraph(doc)
+    assert counts.count(2) == 1  # 2枚が同じ段落（横並び）
+    index = counts.index(2)
+    texts = [p.text for p in doc.paragraphs]
+    assert any(t.startswith("E-mail：") for t in texts[:index])  # お問い合わせ先より後ろ
+    assert not any(texts[index + 1 :])  # その後ろには、何も続かない
+
+
+def test_single_photo_is_placed_at_the_end_too(app, client_user):
+    r = _release(client_user)
+    saved = save_image(_storage(), f"releases/{r.id}/photos")
+    db.session.add(ReleasePhoto(release_id=r.id, position=1, file_path=saved.relative_path,
+                                original_filename="p.png", content_type=saved.content_type,
+                                size_bytes=saved.size_bytes))
+    db.session.commit()
+    assert _drawings_per_paragraph(_doc(r)).count(1) == 1
+
+
+def test_page_is_a4(app, client_user):
+    from docx.shared import Mm
+
+    section = _doc(_release(client_user)).sections[0]
+    assert round(section.page_width.mm) == 210 and round(section.page_height.mm) == 297

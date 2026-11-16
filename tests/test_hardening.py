@@ -300,3 +300,176 @@ def test_reject_reason_length_limit(app, client_user, admin_user):
     assert c.post(f"/admin/releases/{release.id}/reject", data={"reason": "あ" * 1000}).status_code == 302
     db.session.refresh(release)
     assert release.status == "rejected"
+
+
+# ---- タイトルの長さ（全角22文字以内。「【取材のお願い】」は除く） ----
+def test_display_width():
+    from app.textutil import display_width
+
+    assert display_width("あいう") == 3
+    assert display_width("ABC") == 1.5  # 半角は0.5
+    assert display_width("Ａ") == 1  # 全角英字は1
+    assert display_width("あA") == 1.5
+    assert display_width(None) == 0
+
+
+def test_title_of_22_fullwidth_chars_is_accepted(client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    title = "あ" * 22
+    assert _save(client, release, title=title).status_code == 302
+    db.session.refresh(release)
+    assert release.title == title
+
+
+def test_title_of_23_fullwidth_chars_is_rejected(client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    res = _save(client, release, title="あ" * 23)
+    assert res.status_code == 200
+    assert "全角22文字以内" in res.get_data(as_text=True)
+    db.session.refresh(release)
+    assert release.title == ""
+
+
+def test_halfwidth_chars_count_as_half(client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    assert _save(client, release, title="a" * 44).status_code == 302  # 半角44文字 = 全角22文字
+    assert _save(client, release, title="a" * 45).status_code == 200  # 超えると拒否
+
+
+def test_mixed_title_boundary(client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    assert _save(client, release, title="あ" * 21 + "ab").status_code == 302  # 21 + 1 = 22
+    assert _save(client, release, title="あ" * 21 + "abc").status_code == 200  # 22.5
+
+
+def test_service_also_guards_title(app, client_user):
+    release = Release(user_id=client_user.id)
+    db.session.add(release)
+    db.session.commit()
+    with pytest.raises(service.ReleaseError, match="全角22文字"):
+        service.update_fields(release, {"title": "あ" * 23})
+
+
+def test_admin_cannot_set_too_long_title(app, client_user, admin_user):
+    release = _pending_release(client_user)
+    c = app.test_client()
+    login(c, "admin@example.com")
+    res = c.post(f"/admin/releases/{release.id}", data=_edit_data(title="あ" * 23))
+    assert res.status_code == 200
+    db.session.refresh(release)
+    assert release.title == FULL["title"]
+
+
+def test_title_limit_is_configurable(client, client_user, app):
+    app.config["TITLE_MAX_WIDTH"] = 10
+    login(client, "client@example.com")
+    release = _new_release(client)
+    assert _save(client, release, title="あ" * 11).status_code == 200
+    assert _save(client, release, title="あ" * 10).status_code == 302
+
+
+# ---- 写真は横長だけ（ロゴは対象外） ----
+def _png(w, h):
+    buf = io.BytesIO()
+    Image.new("RGB", (w, h), (10, 20, 30)).save(buf, "PNG")
+    return buf.getvalue()
+
+
+def _upload_photo(client, release_id, data, name="p.png", base="/releases"):
+    return client.post(f"{base}/{release_id}/photos", data={"photo": (io.BytesIO(data), name)},
+                       content_type="multipart/form-data", follow_redirects=True)
+
+
+def test_landscape_photo_accepted(client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    _upload_photo(client, release.id, _png(300, 200))  # 1.5
+    db.session.refresh(release)
+    assert len(release.photos) == 1
+
+
+def test_portrait_photo_rejected(client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    res = _upload_photo(client, release.id, _png(200, 300))
+    assert "横長の写真" in res.get_data(as_text=True)
+    db.session.refresh(release)
+    assert release.photos == []
+
+
+def test_square_and_nearly_square_photos_rejected(client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    for size in ((200, 200), (210, 200)):  # 1.0 と 1.05
+        _upload_photo(client, release.id, _png(*size))
+    db.session.refresh(release)
+    assert release.photos == []
+
+
+def test_aspect_boundary_is_inclusive(client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    _upload_photo(client, release.id, _png(240, 200))  # ちょうど 1.2
+    db.session.refresh(release)
+    assert len(release.photos) == 1
+
+
+def test_orientation_is_judged_after_exif_rotation(client, client_user):
+    """横に保存されていても、EXIF で縦向きとされている写真は、見た目どおり縦長として拒否する。"""
+    exif = Image.Exif()
+    exif[0x0112] = 6  # 90度回転して表示する
+    buf = io.BytesIO()
+    Image.new("RGB", (300, 200), (1, 2, 3)).save(buf, "JPEG", exif=exif.tobytes())
+    login(client, "client@example.com")
+    release = _new_release(client)
+    res = _upload_photo(client, release.id, buf.getvalue(), name="a.jpg")
+    assert "横長の写真" in res.get_data(as_text=True)
+
+
+def test_saved_landscape_photo_stays_landscape(client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    _upload_photo(client, release.id, _png(300, 200))
+    db.session.refresh(release)
+    with Image.open(resolve_path(release.photos[0].file_path)) as img:
+        assert img.size == (300, 200)
+
+
+def test_admin_photo_must_be_landscape_too(app, client_user, admin_user):
+    release = _pending_release(client_user)
+    c = app.test_client()
+    login(c, "admin@example.com")
+    res = _upload_photo(c, release.id, _png(200, 300), base="/admin/releases")
+    assert "横長の写真" in res.get_data(as_text=True)
+    db.session.refresh(release)
+    assert release.photos == []
+    _upload_photo(c, release.id, _png(300, 200), base="/admin/releases")
+    db.session.refresh(release)
+    assert len(release.photos) == 1
+
+
+def test_logo_can_be_portrait_or_square(client, client_user):
+    login(client, "client@example.com")
+    for size in ((200, 300), (200, 200)):
+        client.post("/mypage/profile/logo", data={"logo": (io.BytesIO(_png(*size)), "l.png")},
+                    content_type="multipart/form-data")
+        assert db.session.get(User, client_user.id).logo_path
+
+
+def test_two_landscape_photos_are_side_by_side_in_word(app, client, client_user):
+    login(client, "client@example.com")
+    release = _new_release(client)
+    _upload_photo(client, release.id, _png(300, 200))
+    _upload_photo(client, release.id, _png(320, 180))
+    db.session.refresh(release)
+    release.summary, release.approved_at = "要旨", utcnow()
+    db.session.commit()
+    from docx.oxml.ns import qn
+
+    doc = Document(io.BytesIO(docgen.render_release(release)))
+    per_paragraph = [len(p._p.findall(".//" + qn("w:drawing"))) for p in doc.paragraphs]
+    assert per_paragraph.count(2) == 1

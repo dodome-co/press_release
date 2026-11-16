@@ -4,6 +4,7 @@ Word（XML）に入れられない制御文字が1つでもあると、docxtpl �
 黙って消してしまう。そのため、保存するときに取り除く（Word に出す直前にも、念のため掃除する）。
 """
 import re
+import unicodedata
 
 # XML 1.0 で使えない文字（改行 \n とタブ \t は使える）
 _INVALID_XML = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff￾￿\x7f]")
@@ -13,3 +14,14 @@ def clean_text(value: str | None) -> str:
     """制御文字を取り除き、改行を \\n にそろえ、前後の空白を取る。"""
     text = (value or "").replace("\r\n", "\n").replace("\r", "\n")
     return _INVALID_XML.sub("", text).strip()
+
+
+def display_width(text: str | None) -> float:
+    """全角を1、半角を0.5として数えた「全角換算の文字数」。
+
+    Word のタイトルは1行に収めたいので、全角換算で長さを決める。
+    """
+    total = 0.0
+    for ch in text or "":
+        total += 1.0 if unicodedata.east_asian_width(ch) in ("W", "F") else 0.5
+    return total

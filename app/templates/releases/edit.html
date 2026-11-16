@@ -11,7 +11,7 @@
 <form method="post" novalidate>
   {{ form.hidden_tag() }}
   <h2>基本情報</h2>
-  {{ field(form.title) }}
+  {{ field(form.title, placeholder="全角22文字以内") }}
   {{ field(form.event_at_text, placeholder="例：2026年12月1日（火）14:00〜16:00") }}
   {{ field(form.location) }}
 
@@ -59,6 +59,6 @@
   <input type="file" name="photo" accept="image/jpeg,image/png,image/webp">
   <button type="submit">写真を追加</button>
 </form>
-<p>JPEG・PNG・WebP、5MBまで。</p>
+<p>横長（縦より横が長い）の写真だけ使えます。JPEG・PNG・WebP、5MBまで。</p>
 {% endif %}
 {% endblock %}
