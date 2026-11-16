@@ -260,7 +260,7 @@ def test_cannot_create_when_limit_reached(client, logged_in):
     _save(client, release)
     client.post(f"/releases/{release.id}/submit")
     res = client.post("/releases/new", follow_redirects=True)
-    assert "1件まで" in res.get_data(as_text=True)
+    assert "枠を使い切りました" in res.get_data(as_text=True)
     assert Release.query.count() == 1
 
 
@@ -273,7 +273,7 @@ def test_cannot_bypass_limit_by_creating_multiple_drafts(client, logged_in):
     db.session.refresh(first)
     assert first.status == "pending"
     res = client.post(f"/releases/{second.id}/submit", follow_redirects=True)
-    assert "1件まで" in res.get_data(as_text=True)
+    assert "枠を使い切りました" in res.get_data(as_text=True)
     db.session.refresh(second)
     assert second.status == "draft" and second.first_submitted_at is None
 

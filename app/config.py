@@ -25,6 +25,14 @@ class Config:
     # アップロードしたファイルの保存先（開発は instance/uploads。本番は VM のディスク上の専用フォルダ）
     UPLOAD_DIR = os.environ.get("UPLOAD_DIR", "")
     UPLOAD_MAX_BYTES = 5 * 1024 * 1024  # 画像1枚あたり 5MB
+    # 決済（Stripe）。テスト用のキーを .env に書く（Git に入れない）
+    STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    # Checkout の支払いの有効時間（分）。過ぎると、注文は取り消される
+    CHECKOUT_EXPIRES_MINUTES = int(os.environ.get("CHECKOUT_EXPIRES_MINUTES", "30"))
+    # お問い合わせ先（メール・案内に載せる）。決まるまでは「準備中」と表示される
+    SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "")
+
     # 書類の写真は横長だけ（横÷縦がこの値以上）。ロゴには適用しない
     PHOTO_MIN_ASPECT_RATIO = float(os.environ.get("PHOTO_MIN_ASPECT_RATIO", "1.2"))
     UPLOAD_MAX_PIXELS = 16_000_000  # 極端に大きな画像でメモリを使い切るのを防ぐ（縦×横。約4000×4000）
@@ -78,6 +86,10 @@ class ProductionConfig(Config):
             problems.append("BASE_URL を https:// から始まる形で設定してください")
         if not cls.TRUSTED_HOSTS:
             problems.append("TRUSTED_HOSTS に本番のドメインを設定してください")
+        if not cls.STRIPE_SECRET_KEY:
+            problems.append("STRIPE_SECRET_KEY を設定してください（公開時は本番用の sk_live_ のキー）")
+        if not cls.STRIPE_WEBHOOK_SECRET:
+            problems.append("STRIPE_WEBHOOK_SECRET を設定してください")
         if cls.MAIL_BACKEND == "console":
             problems.append("本番用の MAIL_BACKEND を設定してください（console は開発専用）")
         if problems:
