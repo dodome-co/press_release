@@ -5,7 +5,17 @@
 <p>状態：{{ release.status|status_label }}</p>
 <p>※これは入力内容の確認用です。Word は、管理者の承認時に作られます。</p>
 
-{% if release.status == 'pending' %}
+{% if release.status == 'approved' %}
+  <p><a href="{{ url_for('releases.download', release_id=release.id) }}">Word をダウンロードする</a></p>
+  {% if admin_changes %}
+  <h3>管理者が修正した内容</h3>
+  <ul>
+    {% for e in admin_changes %}
+    <li>{{ field_labels.get(e.field_name, e.field_name) }}：<br>変更前：{{ e.old_value or '（なし）' }}<br>変更後：{{ e.new_value or '（なし）' }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+{% elif release.status == 'pending' %}
   <p>承認までの目安は、{{ target_days }}営業日以内です。承認待ちの間は、編集できません。</p>
 {% elif release.status == 'rejected' and release.reject_reason %}
   <p class="error">差し戻しの理由：{{ release.reject_reason }}</p>

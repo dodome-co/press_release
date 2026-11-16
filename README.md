@@ -17,9 +17,11 @@ uv run pytest                # テストを実行
 
 - `app/` … アプリ本体（Flask）。`config.py` で開発/本番/テストの設定を切り替える
 - `app/auth/` … 認証（会員登録・ログイン・パスワード再設定・アクセス制御）
+- `app/releases/` … 書類（クライアントの入力・提出）、`app/admin.py` … 管理者の確認・編集・承認
+- `app/docgen.py` … Word の出力、`app/uploads.py` … 画像のアップロード（検証・保存）
 - `migrations/` … データベース変更の記録（Flask-Migrate）
 - `app/templates/` … 画面（HTML）の雛形
-- `templates/` … Word の雛形置き場（仕様書 F26。後で作成）
+- `templates/press_release.docx` … Word の雛形（仕様書 F26）。Word で見た目を整えてよい。作り直すときは `uv run python scripts/make_template.py`（Word で手を入れた内容は消える）
 - `tests/` … テスト
 
 ## 本番の設定（必須）

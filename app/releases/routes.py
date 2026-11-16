@@ -5,7 +5,7 @@ from ..auth.decorators import client_required
 from ..extensions import db
 from ..models import MAX_PHOTOS, MAX_SCHEDULE_ITEMS, Release, ReleasePhoto
 from ..uploads import UploadError
-from . import bp, service
+from . import bp, notifications, service
 from .forms import ReleaseForm
 
 
@@ -117,6 +117,8 @@ def view(release_id):
         can_delete=service.client_can_delete(release),
         missing=service.missing_required(release),
         target_days=current_app.config["APPROVAL_TARGET_BUSINESS_DAYS"],
+        admin_changes=[e for e in release.edits if e.field_name != "summary"],
+        field_labels=service.FIELD_LABELS,
     )
 
 
@@ -126,6 +128,7 @@ def submit(release_id):
     release = _owned_release_or_404(release_id)
     try:
         service.submit(release)
+        notifications.notify_submitted(release)
         flash("提出しました。管理者が確認します。", "success")
     except service.ReleaseError as e:
         flash(str(e), "error")
@@ -143,3 +146,13 @@ def delete(release_id):
     except service.ReleaseError as e:
         flash(str(e), "error")
         return redirect(url_for("releases.view", release_id=release.id))
+
+
+@bp.get("/<int:release_id>/download")
+@client_required
+def download(release_id):
+    """承認された書類の Word をダウンロードする（承認前は 404）。"""
+    from ..admin import send_approved_docx
+
+    release = _owned_release_or_404(release_id)
+    return send_approved_docx(release)

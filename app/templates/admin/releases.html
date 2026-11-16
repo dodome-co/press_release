@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}書類の一覧{% endblock %}
+{% block content %}
+<h1>書類の一覧</h1>
+<p>
+  <a href="{{ url_for('admin.releases') }}">すべて</a> |
+  <a href="{{ url_for('admin.releases', status='pending') }}">承認待ち</a> |
+  <a href="{{ url_for('admin.releases', status='approved') }}">承認済み</a> |
+  <a href="{{ url_for('admin.releases', status='rejected') }}">差し戻し</a>
+</p>
+{% if releases %}
+<table border="1">
+  <tr><th>タイトル</th><th>会社</th><th>状態</th><th>提出日時（UTC）</th></tr>
+  {% for r in releases %}
+  <tr>
+    <td><a href="{{ url_for('admin.release_detail', release_id=r.id) }}">{{ r.title or '（無題）' }}</a></td>
+    <td>{{ r.user.company_name }}</td>
+    <td>{{ r.status|status_label }}</td>
+    <td>{{ r.submitted_at.strftime('%Y-%m-%d %H:%M') if r.submitted_at else '' }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>該当する書類はありません。</p>
+{% endif %}
+{% endblock %}

@@ -20,4 +20,4 @@ def mypage():
 @bp.get("/admin/")
 @admin_required
 def admin_index():
-    return render_template("placeholder.html", title="管理者ページ")
+    return render_template("admin/index.html")

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "auth/_field.html" import field %}
+{% block title %}書類の確認{% endblock %}
+{% block content %}
+<h1>書類の確認</h1>
+<p><a href="{{ url_for('admin.releases') }}">一覧に戻る</a></p>
+<p>状態：{{ release.status|status_label }}　／　会社：{{ release.user.company_name }}（{{ release.user.contact_name }}　{{ release.user.email }}）</p>
+{% if release.status == 'rejected' %}<p class="error">差し戻しの理由：{{ release.reject_reason }}</p>{% endif %}
+{% if release.status == 'approved' %}
+  <p>承認日時（UTC）：{{ release.approved_at.strftime('%Y-%m-%d %H:%M') }}　<a href="{{ url_for('admin.download', release_id=release.id) }}">Word をダウンロード</a></p>
+{% endif %}
+
+<h2>クライアントが入力した「要旨の元になる情報」</h2>
+<p>取材してほしい内容：<br><span style="white-space:pre-wrap">{{ release.source_what }}</span></p>
+<p>なぜ今これを行うのか：<br><span style="white-space:pre-wrap">{{ release.source_why }}</span></p>
+<p>伝えたいこと：<br><span style="white-space:pre-wrap">{{ release.source_message }}</span></p>
+
+{% if editable %}
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  <h2>要旨（前文）</h2>
+  <p>取材してほしい内容と社会的意義を含めて書いてください。空のままでは承認できません。</p>
+  {{ field(form.summary, rows=8) }}
+
+  <h2>書類の内容（必要なら修正）</h2>
+  {{ field(form.title) }}
+  {{ field(form.event_at_text) }}
+  {{ field(form.location) }}
+  <h3>当日のスケジュール</h3>
+  {% for e in form.schedule_errors %}<p class="error">{{ e }}</p>{% endfor %}
+  {% for time_text, content in schedule %}
+  <p>
+    <input type="text" name="schedule_time_{{ loop.index }}" value="{{ time_text }}" maxlength="50">
+    <input type="text" name="schedule_content_{{ loop.index }}" value="{{ content }}" maxlength="200">
+  </p>
+  {% endfor %}
+  {{ field(form.service_description, rows=6) }}
+  {{ field(form.feature_1) }}
+  {{ field(form.feature_2) }}
+  {{ field(form.feature_3) }}
+  {{ field(form.application_method, rows=3) }}
+  {{ field(form.application_deadline) }}
+  <button type="submit">保存する</button>
+</form>
+
+<h2>写真</h2>
+{% for photo in release.photos %}
+  <div>
+    <img src="{{ url_for('files.photo', photo_id=photo.id) }}" alt="{{ photo.original_filename }}" style="max-width:240px">
+    <form action="{{ url_for('admin.delete_photo', release_id=release.id, photo_id=photo.id) }}" method="post" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit">削除</button>
+    </form>
+  </div>
+{% endfor %}
+{% if release.photos|length < max_photos %}
+<form action="{{ url_for('admin.add_photo', release_id=release.id) }}" method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="file" name="photo" accept="image/jpeg,image/png,image/webp">
+  <button type="submit">写真を追加</button>
+</form>
+{% endif %}
+
+<h2>承認・差し戻し</h2>
+<p><a href="{{ url_for('admin.preview_docx', release_id=release.id) }}">Word の仮出力を見る（保存・承認はされません）</a></p>
+<form action="{{ url_for('admin.approve', release_id=release.id) }}" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit">承認して Word を出力する</button>
+</form>
+<form action="{{ url_for('admin.reject', release_id=release.id) }}" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <p><label>差し戻しの理由（必須）<br><textarea name="reason" rows="3" cols="60"></textarea></label></p>
+  <button type="submit">差し戻す</button>
+</form>
+
+{% else %}
+<h2>要旨（前文）</h2>
+<p style="white-space:pre-wrap">{{ release.summary or '' }}</p>
+<h2>書類の内容</h2>
+<p>【取材のお願い】{{ release.title }}</p>
+<ul>
+  <li>日時：{{ release.event_at_text }}</li><li>会場：{{ release.location }}</li>
+  <li>申込方法：{{ release.application_method }}</li><li>締切：{{ release.application_deadline }}</li>
+</ul>
+<p style="white-space:pre-wrap">{{ release.service_description }}</p>
+{% for photo in release.photos %}
+  <img src="{{ url_for('files.photo', photo_id=photo.id) }}" alt="{{ photo.original_filename }}" style="max-width:240px">
+{% endfor %}
+{% endif %}
+
+{% if release.edits %}
+<h2>編集履歴</h2>
+<table border="1">
+  <tr><th>日時（UTC）</th><th>項目</th><th>変更前</th><th>変更後</th></tr>
+  {% for e in release.edits %}
+  <tr>
+    <td>{{ e.edited_at.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td>{{ e.field_name }}</td>
+    <td style="white-space:pre-wrap">{{ e.old_value }}</td>
+    <td style="white-space:pre-wrap">{{ e.new_value }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% endblock %}
