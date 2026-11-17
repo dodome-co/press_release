@@ -2,14 +2,22 @@
 {% block title %}サービスのご案内{% endblock %}
 {% block content %}
 <h1>サービスのご案内</h1>
-<p>いずれも管理者との事前面談が必要となります。</p>
+<ul>
+  {% for note in notes %}<li>※{{ note }}</li>{% endfor %}
+</ul>
 <p>料金は税込です。</p>
 {% for s in services %}
 <section>
   <h2>{{ s.name }}</h2>
   <p>{{ s.description }}</p>
   <ul>
-    <li>料金：{{ s.price_yen|yen }}</li>
+    {% if s.options %}
+      <li>料金（開催する地域による）：
+        <ul>{% for o in s.options %}<li>{{ o.label }}：{{ o.price_yen(s.key)|yen }}</li>{% endfor %}</ul>
+      </li>
+    {% else %}
+      <li>料金：{{ s.price_yen|yen }}</li>
+    {% endif %}
     <li>納期の目安：{{ s.lead_time }}</li>
   </ul>
   {% if s.key == 'release_creation' and can_create_release %}
@@ -17,6 +25,13 @@
   {% else %}
   <form action="{{ url_for('orders.order_service', key=s.key) }}" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if s.options %}
+      <p>開催する地域（必須）：<br>
+        {% for o in s.options %}
+        <label><input type="radio" name="option" value="{{ o.key }}" required> {{ o.label }}（{{ o.price_yen(s.key)|yen }}）</label><br>
+        {% endfor %}
+      </p>
+    {% endif %}
     {% if s.needs_materials_url %}
       <p><label>素材（写真・動画）の共有リンク（必須）<br>
         <input type="url" name="materials_url" size="60" placeholder="https://" required></label></p>

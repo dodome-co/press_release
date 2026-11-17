@@ -6,7 +6,7 @@ from ..auth.decorators import client_required
 from ..extensions import csrf, db
 from ..models import ORDER_UNPAID, Order
 from ..releases import service as release_service
-from ..services_catalog import REFUND_POLICY, all_services, get_service, support_contact
+from ..services_catalog import REFUND_POLICY, SERVICE_NOTES, all_services, get_service, support_contact
 from . import bp, service
 
 
@@ -26,6 +26,7 @@ def services():
         services=all_services(),
         can_create_release=release_service.can_create(current_user),
         refund_policy=REFUND_POLICY,
+        notes=SERVICE_NOTES,
         support=support_contact(),
     )
 
@@ -36,7 +37,7 @@ def order_service(key):
     if get_service(key) is None:
         abort(404)
     try:
-        order = service.create_order(current_user, key, request.form.get("materials_url"))
+        order = service.create_order(current_user, key, request.form.get("materials_url"), request.form.get("option"))
         url = service.start_checkout(order)
     except service.OrderError as e:
         flash(str(e), "error")

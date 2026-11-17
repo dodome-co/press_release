@@ -65,7 +65,7 @@ def test_admin_is_redirected_from_mypage(admin_client):
 def test_mypage_lists_only_own_orders(app, client_logged_in, client_user):
     mine = _order(client_user, service_type="distribution_proxy")
     other = make_user(email="other@example.com")
-    theirs = _order(other, service_type="interview_accompany")
+    theirs = _order(other, service_type="article_creation")
     body = client_logged_in.get("/mypage/orders").get_data(as_text=True)
     assert f"/mypage/orders/{mine.id}" in body and f"/mypage/orders/{theirs.id}" not in body
     assert "お支払い済み" in body and "受付" in body

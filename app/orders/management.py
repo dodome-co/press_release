@@ -132,7 +132,7 @@ def deliver_video(order: Order, url: str) -> None:
 
 
 def mark_delivered(order: Order) -> None:
-    """ファイルやリンクの納品がないサービス（企画支援・同行・投げ込み代行）を、納品済みにする。"""
+    """ファイルやリンクの納品がないサービス（記者発表会・投げ込み交渉代行）を、納品済みにする。"""
     if order.service_type in (ARTICLE_CREATION, VIDEO_CREATION):
         raise ManagementError("記事・動画は、ファイルやリンクを納品すると、納品済みになります。")
     _lock(order)

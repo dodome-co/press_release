@@ -291,6 +291,7 @@ class Order(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     service_type = db.Column(db.String(30), nullable=False)
     service_name = db.Column(db.String(100), nullable=False)  # 申込み時のサービス名（退会後も分かるように）
+    service_option = db.Column(db.String(30), nullable=True)  # 料金が変わる選択肢（地域など）。ないサービスは空
     amount_yen = db.Column(db.Integer, nullable=False)  # 申込み時の金額（税込・円）
     status = db.Column(db.String(20), nullable=False, default=ORDER_UNPAID, index=True)
     progress = db.Column(db.String(20), nullable=True)
@@ -325,7 +326,7 @@ REFUND_FAILED = "failed"
 
 # 返金の理由（refund_reason）
 REFUND_REASON_POLICY = "policy"  # 返金の基準どおり
-REFUND_REASON_NO_MEDIA = "no_media"  # 取材会の企画支援：当日、取材するメディアが一件もなかった
+REFUND_REASON_NO_MEDIA = "no_media"  # 記者発表会の企画・当日の同席：当日、取材するメディアが一件もなかった
 REFUND_REASON_SLOT_UNUSED = "slot_unused"  # リリース作成の追加：使っていない枠
 REFUND_REASON_EXTERNAL = "external"  # Stripe の管理画面で直接返金された（通知で反映）
 

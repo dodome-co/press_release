@@ -36,7 +36,7 @@ from ..textutil import clean_text
 REFUNDABLE = (ORDER_PAID, ORDER_PARTIALLY_REFUNDED)
 REASON_LABELS = {
     REFUND_REASON_POLICY: "返金の基準どおり",
-    REFUND_REASON_NO_MEDIA: "当日、取材するメディアが一件もなかった（企画支援）",
+    REFUND_REASON_NO_MEDIA: "当日、取材するメディアが一件もなかった（記者発表会）",
     REFUND_REASON_SLOT_UNUSED: "使っていない枠の返金",
     REFUND_REASON_EXTERNAL: "Stripe の管理画面で直接返金",
 }
@@ -113,7 +113,7 @@ def create_refund(order: Order, admin: User, amount_yen: int, reason: str, note:
     if reason not in (REFUND_REASON_POLICY, REFUND_REASON_NO_MEDIA):
         raise RefundError("返金の理由が正しくありません。")
     if reason == REFUND_REASON_NO_MEDIA and order.service_type != INTERVIEW_PLANNING:
-        raise RefundError("「メディアが一件もなかった」は、取材会の企画支援だけに使えます。")
+        raise RefundError("「メディアが一件もなかった」は、記者発表会の企画・当日の同席だけに使えます。")
     if order.service_type == RELEASE_CREATION:
         reason = REFUND_REASON_SLOT_UNUSED
     note = clean_text(note)

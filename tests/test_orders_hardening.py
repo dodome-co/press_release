@@ -142,7 +142,7 @@ def test_order_paid_while_creating_session_discards_new_session(client, logged_i
 def test_unexpected_checkout_url_is_refused(client, logged_in, monkeypatch, url):
     monkeypatch.setattr(payments, "create_checkout_session", lambda *a, **k: {"id": "cs_x", "url": url})
     monkeypatch.setattr(payments, "expire_checkout_session", lambda sid: None)
-    res = client.post("/services/interview_planning/order", follow_redirects=False)
+    res = client.post("/services/distribution_proxy/order", follow_redirects=False)
     assert res.status_code == 302 and "/services" in res.headers["Location"]
     assert OrderCheckoutSession.query.count() == 0
 
@@ -150,7 +150,7 @@ def test_unexpected_checkout_url_is_refused(client, logged_in, monkeypatch, url)
 def test_stripe_domains_are_accepted(client, logged_in, monkeypatch):
     monkeypatch.setattr(payments, "create_checkout_session",
                         lambda *a, **k: {"id": "cs_x", "url": "https://checkout.stripe.com/c/pay/cs_x#abc"})
-    assert client.post("/services/interview_planning/order").status_code == 303
+    assert client.post("/services/distribution_proxy/order").status_code == 303
 
 
 # ---- 4. 素材リンクの検証 ----
@@ -194,18 +194,18 @@ def test_profile_website_url_is_strict_too(client, client_user):
 def test_unpaid_orders_are_limited(client, logged_in, gateway, app):
     app.config["MAX_UNPAID_ORDERS"] = 3
     for _ in range(3):
-        assert client.post("/services/interview_planning/order").status_code == 303
-    res = client.post("/services/interview_planning/order", follow_redirects=True)
+        assert client.post("/services/distribution_proxy/order").status_code == 303
+    res = client.post("/services/distribution_proxy/order", follow_redirects=True)
     assert "お支払い前の注文が多すぎます" in res.get_data(as_text=True)
     assert Order.query.count() == 3 and len(gateway["created"]) == 3
     client.post("/orders/1/cancel")  # 取り消せば、また申し込める
-    assert client.post("/services/interview_planning/order").status_code == 303
+    assert client.post("/services/distribution_proxy/order").status_code == 303
 
 
 def test_paid_orders_do_not_count_toward_unpaid_limit(client, logged_in, gateway, app):
     app.config["MAX_UNPAID_ORDERS"] = 1
     _order(logged_in, status="paid")
-    assert client.post("/services/interview_planning/order").status_code == 303
+    assert client.post("/services/distribution_proxy/order").status_code == 303
 
 
 # ---- 6. 設定 ----
@@ -318,10 +318,10 @@ def test_real_stripe_session_object_works_end_to_end(app, client, logged_in, mon
 
     monkeypatch.setattr(stripe.checkout.Session, "create", fake_create)
     monkeypatch.setattr(payments, "expire_checkout_session", lambda sid: None)
-    res = client.post("/services/interview_planning/order")
+    res = client.post("/services/distribution_proxy/order")
     assert res.status_code == 303 and res.headers["Location"] == "https://checkout.stripe.com/c/pay/cs_test_real"
     assert Order.query.one().stripe_session_id == "cs_test_real"
-    assert captured["line_items"][0]["price_data"]["unit_amount"] == 60000
+    assert captured["line_items"][0]["price_data"]["unit_amount"] == 3000
     assert captured["line_items"][0]["price_data"]["currency"] == "jpy"
     assert captured["idempotency_key"] == "checkout-order-1-1"
     assert captured["metadata"] == {"order_id": "1"}
@@ -343,6 +343,6 @@ def test_stripe_api_error_becomes_message(app, client, logged_in, monkeypatch):
     app.config["STRIPE_SECRET_KEY"] = "sk_test_x"  # キーがあって、Stripe 側がエラーを返す場合
     monkeypatch.setattr(stripe.checkout.Session, "create",
                         lambda **kw: (_ for _ in ()).throw(stripe.AuthenticationError("bad key")))
-    res = client.post("/services/interview_planning/order", follow_redirects=True)
+    res = client.post("/services/distribution_proxy/order", follow_redirects=True)
     assert res.status_code == 200 and "決済を開始できませんでした" in res.get_data(as_text=True)
     assert Order.query.one().status == "unpaid"
