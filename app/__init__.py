@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # 設定（config.py）が環境変数を読む前に .env を読み込む
 load_dotenv()
 
-from flask import Flask  # noqa: E402
+from flask import Flask, url_for  # noqa: E402
 from werkzeug.middleware.proxy_fix import ProxyFix  # noqa: E402
 
 from .config import CONFIGS  # noqa: E402
@@ -74,6 +74,14 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(mypage_bp)
 
     STATUS_LABELS = {"draft": "下書き", "pending": "承認待ち", "approved": "承認済み", "rejected": "差し戻し"}
+    @app.context_processor
+    def inject_logo():
+        """ロゴは、app/static/img/ に logo.png（または svg / webp / jpg）を置くと、ヘッダーに自動で出る。"""
+        for ext in ("svg", "png", "webp", "jpg"):
+            if os.path.isfile(os.path.join(app.static_folder, "img", f"logo.{ext}")):
+                return {"logo_url": url_for("static", filename=f"img/logo.{ext}")}
+        return {"logo_url": None}
+
     ORDER_STATUS_LABELS = {"unpaid": "お支払い前", "paid": "お支払い済み", "canceled": "取り消し",
                            "refunded": "返金済み", "partially_refunded": "一部返金"}
     PROGRESS_LABELS = {"received": "受付", "in_progress": "着手", "delivered": "納品済み"}

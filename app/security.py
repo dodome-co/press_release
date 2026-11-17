@@ -12,7 +12,8 @@ def register_security_headers(app):
         if request.is_secure or current_app.config.get("SESSION_COOKIE_SECURE"):
             response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
         # ログイン後の画面や認証まわりの画面は、ブラウザに保存させない
-        if current_user.is_authenticated or request.blueprint == "auth":
+        # ただし、見た目のファイル（CSS・ロゴ）は、みんな同じなので、ブラウザに保存させる
+        if request.endpoint != "static" and (current_user.is_authenticated or request.blueprint == "auth"):
             response.headers["Cache-Control"] = "no-store"
         return response
 

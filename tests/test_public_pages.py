@@ -24,6 +24,32 @@ def test_top_page_is_public_and_has_the_story(client):
     assert "準備中です" not in body
 
 
+def test_top_page_has_the_tagline_and_the_logo(client):
+    body = client.get("/").get_data(as_text=True)
+    assert "東北のいいものを、より多くの人たちに。" in body
+    assert "地域発の商品を地域のメディアにつなぎます" in body
+    assert "東北のいいものを、より多くの人たちに。</span><span>地域発の商品を地域のメディアにつなぎます" in body
+    assert 'class="tagline"' in body and 'class="hero-logo"' in body and 'alt="ゆきわり。"' in body
+    assert body.index('class="hero-logo"') < body.index('class="tagline"')
+
+
+def test_top_page_buttons_are_styled_as_buttons(client):
+    body = client.get("/").get_data(as_text=True)
+    assert 'class="button" href="/register"' in body and 'class="button secondary" href="/login"' in body
+
+
+def test_about_page_tells_the_story_of_yukiwari(client):
+    body = client.get("/about").get_data(as_text=True)
+    assert "PR会社「ゆきわり。」は東北生まれの姉弟が運営しています。" in body
+    assert "ロゴはニンニク栽培・販売を営む母のブランドから拝借しています。" in body
+    assert body.index("元地方紙の記者") < body.index("東北生まれの姉弟")  # 会社紹介の中の、キャッチコピーの次
+
+
+def test_company_name_defaults_to_yukiwari(client):
+    body = client.get("/about").get_data(as_text=True)
+    assert "<th>会社名</th><td>ゆきわり。</td>" in body
+
+
 def test_top_page_does_not_list_the_release_slot_as_a_separate_service(client):
     body = client.get("/").get_data(as_text=True)
     assert "2件目以降のリリース作成（1件分）" not in body and "2件目以降は、1件ずつ追加できます" in body
@@ -59,7 +85,7 @@ def test_about_page_is_public(client):
 def test_ages_are_shown_as_30s_and_private_details_are_removed(client):
     body = client.get("/about").get_data(as_text=True)
     assert body.count("30代") == 2  # 代表者と動画担当の、どちらも
-    for removed in ("旧姓", "鈴木", "琴実", "1992", "1995", "生まれ", "TOEIC", "805", "Ayumu", "QuizKnock", "Quizknock",
+    for removed in ("旧姓", "鈴木", "琴実", "1992", "1995", "年生まれ", "TOEIC", "805", "Ayumu", "QuizKnock", "Quizknock",
                     "Nephrite", "２０１４"):
         assert removed not in body, removed
 
@@ -77,11 +103,11 @@ def test_contact_details_come_from_settings_not_from_the_code(client, app):
     app.config.update(COMPANY_ADDRESS="岩手県盛岡市テスト1-2-3", SUPPORT_EMAIL="info@example.com", OPERATOR_NAME="テスト社")
     body = client.get("/about").get_data(as_text=True)
     assert "岩手県盛岡市テスト1-2-3" in body and "info@example.com" in body and "テスト社" in body
-    assert "VERBINDEN" not in body
+    assert "VERBINDEN" not in body and "ゆきわり。」は" in body  # 設定の会社名と、紹介文の「ゆきわり。」は、別
 
 
 def test_default_operator_name(app):
-    assert app.config["OPERATOR_NAME"] == "VERBINDEN（仮）"
+    assert app.config["OPERATOR_NAME"] == "ゆきわり。"
 
 
 def test_about_escapes_settings(client, app):

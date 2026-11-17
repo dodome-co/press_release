@@ -1,19 +1,24 @@
 {% extends "base.html" %}
 {% block title %}プレスリリースサポート{% endblock %}
 {% block content %}
-<section>
+<section class="hero">
+  {% if logo_url %}<img class="hero-logo" src="{{ logo_url }}" alt="ゆきわり。">{% endif %}
   <h1>プレスリリースサポート</h1>
-  <p>東北のいいもの、新しいサービスを、記者に届けるお手伝いをします。<br>
-    元地方紙の記者が、御社のプレスリリースづくりと、記者クラブへの投げ込みを、サポートします。</p>
+  <p class="tagline"><span>東北のいいものを、より多くの人たちに。</span><span>地域発の商品を地域のメディアにつなぎます</span></p>
+  <p>元地方紙の記者が、御社のプレスリリースづくりと、記者クラブへの投げ込みを、サポートします。</p>
+  <p class="hero-actions">
   {% if current_user.is_authenticated %}
     {% if current_user.is_admin %}
-      <p><a href="{{ url_for('admin.index_page') }}">管理者ページへ</a></p>
+      <a class="button" href="{{ url_for('admin.index_page') }}">管理者ページへ</a>
     {% else %}
-      <p><a href="{{ url_for('releases.index') }}">プレスリリースを作る</a>　／　<a href="{{ url_for('mypage.index') }}">マイページ</a></p>
+      <a class="button" href="{{ url_for('releases.index') }}">プレスリリースを作る</a>
+      <a class="button secondary" href="{{ url_for('mypage.index') }}">マイページ</a>
     {% endif %}
   {% else %}
-    <p><a href="{{ url_for('auth.register') }}">無料で会員登録</a>　／　<a href="{{ url_for('auth.login') }}">ログイン</a></p>
+    <a class="button" href="{{ url_for('auth.register') }}">無料で会員登録</a>
+    <a class="button secondary" href="{{ url_for('auth.login') }}">ログイン</a>
   {% endif %}
+  </p>
 </section>
 
 <section>

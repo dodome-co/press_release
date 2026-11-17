@@ -33,7 +33,7 @@ class Config:
     # お支払い前（未払い）の注文を、1人が同時に持てる数（申込みの連打で増え続けないように）
     MAX_UNPAID_ORDERS = int(os.environ.get("MAX_UNPAID_ORDERS", "5"))
     # 運営者の情報（About Us に載せる）。個人の連絡先を、Git に入れないため、環境変数で設定する
-    OPERATOR_NAME = os.environ.get("OPERATOR_NAME", "VERBINDEN（仮）")
+    OPERATOR_NAME = os.environ.get("OPERATOR_NAME", "ゆきわり。")
     COMPANY_ADDRESS = os.environ.get("COMPANY_ADDRESS", "")
     # お問い合わせ先（メール・案内に載せる）。決まるまでは「準備中」と表示される
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "")
