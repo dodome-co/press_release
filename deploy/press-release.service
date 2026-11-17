@@ -1,0 +1,31 @@
+# systemd の設定：アプリを、VM の起動時に自動で立ち上げ、止まったら、立ち上げ直す。
+# 置き場所：/etc/systemd/system/press-release.service
+[Unit]
+Description=プレスリリースサポート（ゆきわり。デモ）
+After=network.target
+
+[Service]
+Type=simple
+User=pressrel
+Group=pressrel
+WorkingDirectory=/opt/press-release
+# 秘密の設定（SECRET_KEY・Stripe のキーなど）。root だけが読める（chmod 600）
+EnvironmentFile=/etc/press-release.env
+ExecStart=/opt/press-release/.venv/bin/gunicorn -c deploy/gunicorn.conf.py "app:create_app()"
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+
+# 守り：できることを、必要なだけに絞る
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# 書き込めるのは、データベースとアップロードのフォルダだけ
+ReadWritePaths=/var/lib/press-release
+
+[Install]
+WantedBy=multi-user.target

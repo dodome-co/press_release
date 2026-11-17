@@ -89,3 +89,6 @@ SUPPORT_EMAIL=…@example.com
 - 会員登録：同じ IP から、1時間に10回まで。パスワード再設定の依頼：同じ IP から1時間に5回まで、同じメールアドレス宛ては1時間に3通まで。
 - 回数と期間は、`.env.example` の `RATE_*` で変えられる。`RATE_LIMIT_ENABLED=0` で、止める。
 - **Nginx の後ろで動かすときは、Nginx が、相手の IP を `X-Forwarded-For` に設定する**必要がある（`proxy_set_header X-Forwarded-For $remote_addr;`。相手から来た値を、そのまま引き継がない）。そうしないと、すべての相手が同じ IP に見えて、全員がまとめて止まる、または、IP の偽装で、制限をすり抜けられる。
+
+## VM への設置
+ビジネスプラン発表用に、Google Cloud の VM（Ubuntu 24.04）に置く手順は、[docs/VM設置手順.md](docs/VM設置手順.md)。設定ファイル（gunicorn・systemd・Nginx・環境変数の例）と、更新・バックアップのスクリプトは `deploy/` にある。
