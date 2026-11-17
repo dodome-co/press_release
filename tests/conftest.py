@@ -5,6 +5,10 @@ from flask.testing import FlaskClient
 from app import create_app
 from app.extensions import db
 from app.models import ROLE_ADMIN, User
+from sqlalchemy.exc import IntegrityError, OperationalError
+
+# CHECK 制約の違反：SQLite は IntegrityError、MySQL は OperationalError（3819）で返す
+CHECK_VIOLATION = (IntegrityError, OperationalError)
 
 
 class _FreshUserClient(FlaskClient):

@@ -371,6 +371,8 @@ def test_leftover_directory_is_logged_on_account_deletion(app, admin_client, cap
 
 # ================= 低9：番号の再利用で、古いセッションが別人にならない =================
 def test_reused_user_id_does_not_inherit_old_session(app, client):
+    if not str(db.engine.url).startswith("sqlite"):
+        pytest.skip("番号を再利用するのは SQLite だけ（MySQL は、消した番号を再利用しない）")
     from .conftest import login as do_login
 
     first = make_user(email="first@example.com")

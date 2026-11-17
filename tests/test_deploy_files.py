@@ -193,4 +193,6 @@ def test_sqlite_uses_wal_for_file_databases(tmp_path, monkeypatch):
 def test_in_memory_database_is_left_alone(app):
     from app.extensions import db
 
+    if not str(db.engine.url).startswith("sqlite"):
+        pytest.skip("PRAGMA は SQLite 専用")
     assert db.session.execute(db.text("PRAGMA journal_mode")).scalar() == "memory"
