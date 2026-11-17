@@ -9,5 +9,6 @@
   <li><a href="{{ url_for('admin_orders.orders') }}">注文の一覧（すべて）</a></li>
   <li><a href="{{ url_for('admin_services.index') }}">自社サービスの紹介（クライアントの入力）</a></li>
   <li><a href="{{ url_for('admin_users.users') }}">会員の一覧（退会処理）</a></li>
+  {% if config.MAIL_BACKEND == 'database' %}<li><a href="{{ url_for('admin_mails.index') }}">送信予定のメール（デモ用）</a></li>{% endif %}
 </ul>
 {% endblock %}

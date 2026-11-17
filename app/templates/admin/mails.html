@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}送信予定のメール{% endblock %}
+{% block content %}
+<h1>送信予定のメール（デモ用）</h1>
+<p>デモでは、メールを実際には送りません。この操作で届くはずだったメールを、ここで見られます。パスワード再設定のリンクなどを含むので、管理者だけが見られます。</p>
+{% if not enabled %}<p class="error">いまの設定では、メールを記録していません（MAIL_BACKEND=database のときだけ記録されます）。</p>{% endif %}
+<form method="get"><input type="search" name="q" value="{{ q }}" placeholder="宛先・件名"><button type="submit">検索</button></form>
+{% if mails %}
+<table border="1">
+  <tr><th>日時（UTC）</th><th>宛先</th><th>件名</th></tr>
+  {% for m in mails %}
+  <tr>
+    <td>{{ m.created_at|dt }}</td>
+    <td>{{ m.to_address }}</td>
+    <td><a href="{{ url_for('admin_mails.detail', mail_id=m.id) }}">{{ m.subject }}</a></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p>記録されたメールはありません。</p>{% endif %}
+<p><a href="{{ url_for('admin.index_page') }}">管理者ページに戻る</a></p>
+{% endblock %}

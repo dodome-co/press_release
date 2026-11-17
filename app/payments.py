@@ -75,6 +75,9 @@ def create_refund(payment_intent_id: str, amount_yen: int, idempotency_key: str,
 
     失敗したとき：実行されなかったと分かれば PaymentRejected、結果が分からなければ PaymentUncertain。
     """
+    if payment_intent_id.startswith("pi_demo_") and current_app.config.get("DEMO_MODE"):
+        # デモ用のサンプルの注文（本物の支払いはない）。デモ環境でだけ、返金を模擬する
+        return {"id": f"re_demo_{idempotency_key}", "status": "succeeded"}
     _configure()
     try:
         refund = stripe.Refund.create(

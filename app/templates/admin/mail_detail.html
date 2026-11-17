@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}メール{% endblock %}
+{% block content %}
+<h1>メール（送信予定）</h1>
+<p><a href="{{ url_for('admin_mails.index') }}">一覧に戻る</a></p>
+<ul>
+  <li>日時（UTC）：{{ mail.created_at|dt }}</li>
+  <li>宛先：{{ mail.to_address }}</li>
+  <li>件名：{{ mail.subject }}</li>
+</ul>
+<pre style="white-space:pre-wrap">{{ mail.body }}</pre>
+{% endblock %}
