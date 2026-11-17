@@ -6,7 +6,7 @@ from app.extensions import db
 from app.models import Order, Release, StripeEvent, User, utcnow
 from app.releases import service
 
-from .conftest import make_user
+from .conftest import make_user, CHECK_VIOLATION
 from .test_releases import FULL
 
 
@@ -112,14 +112,14 @@ def test_order_defaults(app, client_user):
 def test_refund_cannot_exceed_amount(app, client_user):
     o = _order(client_user, amount=1000)
     o.refunded_amount = 1001
-    with pytest.raises(IntegrityError):
+    with pytest.raises(CHECK_VIOLATION):
         db.session.commit()
     db.session.rollback()
 
 
 def test_negative_amount_rejected(app, client_user):
     db.session.add(Order(user_id=client_user.id, service_type="x", service_name="x", amount_yen=-1))
-    with pytest.raises(IntegrityError):
+    with pytest.raises(CHECK_VIOLATION):
         db.session.commit()
     db.session.rollback()
 

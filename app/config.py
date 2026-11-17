@@ -14,6 +14,10 @@ class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-me")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:///dev.sqlite3")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # MySQL は、使われない接続を、一定時間でサーバー側が切る。切れた接続を使って、エラーにならないようにする
+    # （SQLite では、効果もなく、害もない）。MySQL の接続文字列の例：
+    #   mysql+pymysql://ユーザー:パスワード@127.0.0.1:3306/press_release?charset=utf8mb4
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_recycle": 1800}
 
     # セッション Cookie の安全設定
     SESSION_COOKIE_HTTPONLY = True
@@ -172,7 +176,9 @@ class TestingConfig(Config):
     STRIPE_WEBHOOK_SECRET = ""
     SUPPORT_EMAIL = ""
     COMPANY_ADDRESS = ""
-    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+    # 既定はメモリ上の SQLite。MySQL で全テストを通すときは、TEST_DATABASE_URL に、テスト専用のデータベースを指定する
+    # （テストごとに、全テーブルを作って消すので、本物のデータが入ったデータベースは、指定しない）
+    SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL", "sqlite:///:memory:")
     WTF_CSRF_ENABLED = False
 
 

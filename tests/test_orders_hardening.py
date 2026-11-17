@@ -11,7 +11,7 @@ from app.models import Order, OrderCheckoutSession, User
 from app.orders import service as order_service
 from app.textutil import is_safe_http_url
 
-from .conftest import login
+from .conftest import login, CHECK_VIOLATION
 from .test_orders import (  # noqa: F401  フィクスチャとして使う
     _event,
     _exhaust_free_slot,
@@ -259,7 +259,7 @@ def test_good_price_override_is_accepted(monkeypatch):
 def test_amount_must_be_at_least_50_yen(app, client_user):
     for amount in (0, 49):
         db.session.add(Order(user_id=client_user.id, service_type="x", service_name="x", amount_yen=amount))
-        with pytest.raises(IntegrityError):
+        with pytest.raises(CHECK_VIOLATION):
             db.session.commit()
         db.session.rollback()
     db.session.add(Order(user_id=client_user.id, service_type="x", service_name="x", amount_yen=50))

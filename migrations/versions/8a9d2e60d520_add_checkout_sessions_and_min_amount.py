@@ -50,7 +50,5 @@ def downgrade():
         batch_op.create_check_constraint('ck_orders_amount_nonnegative', 'amount_yen >= 0')
         batch_op.drop_column('checkout_attempts')
 
-    with op.batch_alter_table('order_checkout_sessions', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_order_checkout_sessions_order_id'))
-
+    # インデックスは、テーブルと一緒に消える（MySQL は、外部キーが使うインデックスを、単独では消せない）
     op.drop_table('order_checkout_sessions')

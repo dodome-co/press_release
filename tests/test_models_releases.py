@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.models import Release, ReleasePhoto, ReleaseScheduleItem, User
 
-from .conftest import make_user
+from .conftest import make_user, CHECK_VIOLATION
 
 
 def _release(user, **kw):
@@ -31,7 +31,7 @@ def test_photo_position_only_1_or_2(app, client_user):
     r = _release(client_user)
     db.session.add(ReleasePhoto(release_id=r.id, position=3, file_path="a", original_filename="a.png",
                                 content_type="image/png", size_bytes=1))
-    with pytest.raises(IntegrityError):
+    with pytest.raises(CHECK_VIOLATION):
         db.session.commit()
     db.session.rollback()
 
@@ -49,7 +49,7 @@ def test_photo_position_unique_per_release(app, client_user):
 def test_schedule_position_range(app, client_user):
     r = _release(client_user)
     db.session.add(ReleaseScheduleItem(release_id=r.id, position=6, time_text="10:00", content="x"))
-    with pytest.raises(IntegrityError):
+    with pytest.raises(CHECK_VIOLATION):
         db.session.commit()
     db.session.rollback()
 
