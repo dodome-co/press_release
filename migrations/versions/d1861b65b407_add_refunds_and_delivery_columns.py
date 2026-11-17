@@ -52,8 +52,6 @@ def downgrade():
         batch_op.drop_column('delivered_at')
         batch_op.drop_column('delivery_filename')
 
-    with op.batch_alter_table('order_refunds', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_order_refunds_order_id'))
-
+    # インデックスは、テーブルと一緒に消える（MySQL は、外部キーが使うインデックスを、単独では消せない）
     op.drop_table('order_refunds')
     # ### end Alembic commands ###

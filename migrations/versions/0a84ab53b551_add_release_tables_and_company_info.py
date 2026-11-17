@@ -125,22 +125,12 @@ def downgrade():
         batch_op.drop_column('founded')
         batch_op.drop_column('department')
 
-    with op.batch_alter_table('release_schedule_items', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_release_schedule_items_release_id'))
-
+    # インデックスは、テーブルと一緒に消える（MySQL は、外部キーが使うインデックスを、単独では消せない）
     op.drop_table('release_schedule_items')
-    with op.batch_alter_table('release_photos', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_release_photos_release_id'))
-
+    # インデックスは、テーブルと一緒に消える（MySQL は、外部キーが使うインデックスを、単独では消せない）
     op.drop_table('release_photos')
-    with op.batch_alter_table('release_edits', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_release_edits_release_id'))
-
+    # インデックスは、テーブルと一緒に消える（MySQL は、外部キーが使うインデックスを、単独では消せない）
     op.drop_table('release_edits')
-    with op.batch_alter_table('releases', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_releases_user_id'))
-        batch_op.drop_index('ix_releases_status_submitted_at')
-        batch_op.drop_index(batch_op.f('ix_releases_status'))
-
+    # インデックスは、テーブルと一緒に消える（MySQL は、外部キーが使うインデックスを、単独では消せない）
     op.drop_table('releases')
     # ### end Alembic commands ###
