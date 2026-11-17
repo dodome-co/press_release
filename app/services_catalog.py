@@ -84,6 +84,22 @@ _SERVICES = (
 SERVICES = {s.key: s for s in _SERVICES}
 
 
+MAX_PAYMENT_YEN = 99_999_999  # Stripe の、日本円の上限
+
+
+def validate_price_overrides() -> None:
+    """環境変数 PRICE_* の値を、起動時に確認する（誤った値でサービス一覧が壊れないように）。"""
+    for service in _SERVICES:
+        name = f"PRICE_{service.key.upper()}"
+        raw = os.environ.get(name)
+        if not raw:
+            continue
+        if not raw.isdigit() or not MIN_PAYMENT_YEN <= int(raw) <= MAX_PAYMENT_YEN:
+            raise RuntimeError(
+                f"{name} は、{MIN_PAYMENT_YEN:,}〜{MAX_PAYMENT_YEN:,} の整数（円・カンマなし）で設定してください：{raw!r}"
+            )
+
+
 def all_services() -> list[Service]:
     return list(_SERVICES)
 

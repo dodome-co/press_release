@@ -20,6 +20,10 @@ def create_app(config_name: str | None = None) -> Flask:
     if hasattr(config_class, "validate"):
         config_class.validate()
 
+    from .services_catalog import validate_price_overrides
+
+    validate_price_overrides()
+
     app = Flask(__name__)
     app.config.from_object(config_class)
 

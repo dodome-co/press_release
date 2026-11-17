@@ -76,7 +76,7 @@ def cancel_post(order_id):
 def pay_again(order_id):
     order = _own_order_or_404(order_id)
     try:
-        url = service.start_checkout(order, attempt=int(order.updated_at.timestamp()))
+        url = service.start_checkout(order)
     except service.OrderError as e:
         flash(str(e), "error")
         return redirect(url_for("orders.services"))
@@ -89,7 +89,10 @@ def webhook():
     """Stripe からの通知。署名が正しいものだけを受け付ける。"""
     try:
         event = payments.construct_event(request.get_data(), request.headers.get("Stripe-Signature"))
-    except (ValueError, payments.SignatureError, payments.PaymentError):
+    except payments.PaymentError:
+        current_app.logger.error("Stripe の Webhook の設定（STRIPE_WEBHOOK_SECRET）が足りません")
+        return "", 400
+    except (ValueError, payments.SignatureError):
         return "", 400
     try:
         result = service.handle_event(event)

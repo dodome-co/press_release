@@ -4,7 +4,7 @@ import pytest
 
 from app import payments
 from app.extensions import db
-from app.models import Order, Release, StripeEvent, utcnow
+from app.models import Order, OrderCheckoutSession, Release, StripeEvent, utcnow
 from app.releases import service as release_service
 
 from .conftest import login, make_user
@@ -19,7 +19,7 @@ def gateway(monkeypatch):
     def create(order, customer_email, success_url, cancel_url, attempt=1):
         calls["created"].append(dict(order_id=order.id, amount=order.amount_yen, name=order.service_name,
                                      email=customer_email, success=success_url, cancel=cancel_url, attempt=attempt))
-        return {"id": f"cs_test_{order.id}_{attempt}", "url": f"https://checkout.stripe.test/pay/{order.id}"}
+        return {"id": f"cs_test_{order.id}_{attempt}", "url": f"https://checkout.stripe.com/c/pay/{order.id}-{attempt}"}
 
     monkeypatch.setattr(payments, "create_checkout_session", create)
     monkeypatch.setattr(payments, "expire_checkout_session", lambda sid: calls["expired"].append(sid))
@@ -38,14 +38,19 @@ def _exhaust_free_slot(user):
 
 
 def _order(user, service_type="interview_planning", amount=60000, status="unpaid", **kw):
+    """注文を作る。支払い画面（セッション）も、1つ作ったことにする。"""
     o = Order(user_id=user.id, service_type=service_type, service_name="テスト", amount_yen=amount, status=status, **kw)
     db.session.add(o)
+    db.session.commit()
+    session_id = o.stripe_session_id or f"cs_order_{o.id}"
+    o.stripe_session_id = session_id
+    db.session.add(OrderCheckoutSession(order_id=o.id, stripe_session_id=session_id))
     db.session.commit()
     return o
 
 
 def _event(event_id, order, event_type="checkout.session.completed", **overrides):
-    obj = {"id": order.stripe_session_id or "cs_x", "payment_status": "paid", "amount_total": order.amount_yen,
+    obj = {"id": order.stripe_session_id, "payment_status": "paid", "amount_total": order.amount_yen,
            "currency": "jpy", "payment_intent": f"pi_{event_id}", "client_reference_id": str(order.id),
            "metadata": {"order_id": str(order.id)}}
     obj.update(overrides)
@@ -103,7 +108,7 @@ def test_releases_index_links_to_purchase_when_exhausted(client, logged_in):
 # ---- 申込み ----
 def test_order_uses_server_side_price_and_redirects_to_stripe(client, logged_in, gateway):
     res = client.post("/services/interview_planning/order", data={"amount_yen": "1", "amount": "1"})
-    assert res.status_code == 303 and res.headers["Location"] == "https://checkout.stripe.test/pay/1"
+    assert res.status_code == 303 and res.headers["Location"] == "https://checkout.stripe.com/c/pay/1-1"
     order = Order.query.one()
     assert (order.amount_yen, order.status, order.user_id) == (60000, "unpaid", logged_in.id)
     assert order.stripe_session_id == "cs_test_1_1"

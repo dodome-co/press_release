@@ -30,6 +30,8 @@ class Config:
     STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     # Checkout の支払いの有効時間（分）。過ぎると、注文は取り消される
     CHECKOUT_EXPIRES_MINUTES = int(os.environ.get("CHECKOUT_EXPIRES_MINUTES", "30"))
+    # お支払い前（未払い）の注文を、1人が同時に持てる数（申込みの連打で増え続けないように）
+    MAX_UNPAID_ORDERS = int(os.environ.get("MAX_UNPAID_ORDERS", "5"))
     # お問い合わせ先（メール・案内に載せる）。決まるまでは「準備中」と表示される
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "")
 
@@ -71,6 +73,12 @@ class Config:
 class DevelopmentConfig(Config):
     DEBUG = True
 
+    @classmethod
+    def validate(cls):
+        # 開発で、本番用のキーを使うと、実際のお金が動いてしまう
+        if cls.STRIPE_SECRET_KEY.startswith(("sk_live_", "rk_live_")):
+            raise RuntimeError("開発では、Stripe の本番用のキー（sk_live_）は使えません。テスト用（sk_test_）にしてください")
+
 
 class ProductionConfig(Config):
     DEBUG = False
@@ -87,7 +95,15 @@ class ProductionConfig(Config):
         if not cls.TRUSTED_HOSTS:
             problems.append("TRUSTED_HOSTS に本番のドメインを設定してください")
         if not cls.STRIPE_SECRET_KEY:
-            problems.append("STRIPE_SECRET_KEY を設定してください（公開時は本番用の sk_live_ のキー）")
+            problems.append("STRIPE_SECRET_KEY を設定してください")
+        elif (
+            not cls.STRIPE_SECRET_KEY.startswith(("sk_live_", "rk_live_"))
+            and os.environ.get("ALLOW_TEST_STRIPE_KEY") != "1"
+        ):
+            problems.append(
+                "本番では、Stripe の本番用のキー（sk_live_）を設定してください"
+                "（テスト用のキーで試すときだけ ALLOW_TEST_STRIPE_KEY=1）"
+            )
         if not cls.STRIPE_WEBHOOK_SECRET:
             problems.append("STRIPE_WEBHOOK_SECRET を設定してください")
         if cls.MAIL_BACKEND == "console":
@@ -98,6 +114,10 @@ class ProductionConfig(Config):
 
 class TestingConfig(Config):
     TESTING = True
+    # テストが、手元の .env のキーで、実際の Stripe を呼んでしまわないようにする
+    STRIPE_SECRET_KEY = ""
+    STRIPE_WEBHOOK_SECRET = ""
+    SUPPORT_EMAIL = ""
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     WTF_CSRF_ENABLED = False
 

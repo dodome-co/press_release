@@ -9,7 +9,7 @@ from . import uploads
 from .auth.decorators import client_required
 from .auth.forms import normalize_phone, normalize_postal_code
 from .extensions import db
-from .textutil import clean_text
+from .textutil import clean_text, is_safe_http_url
 
 bp = Blueprint("profile", __name__, url_prefix="/mypage")
 
@@ -42,9 +42,9 @@ class ProfileForm(FlaskForm):
 
     def validate_website_url(self, field):
         url = (field.data or "").strip()
-        # http(s) 以外（javascript: など）は載せない
-        if url and not url.lower().startswith(("http://", "https://")):
-            raise ValidationError("http:// または https:// で始まる URL を入力してください。")
+        # http(s) 以外（javascript: など）や、空白・改行を含むものは載せない
+        if url and not is_safe_http_url(url):
+            raise ValidationError("http:// または https:// で始まる URL を、空白を含めずに入力してください。")
 
 
 def _blank_to_none(value):

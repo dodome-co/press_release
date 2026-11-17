@@ -11,6 +11,7 @@ from ..models import (
     ORDER_UNPAID,
     PROGRESS_RECEIVED,
     Order,
+    OrderCheckoutSession,
     StripeEvent,
     User,
     utcnow,
@@ -18,7 +19,7 @@ from ..models import (
 from ..releases import service as release_service
 from ..security import external_url
 from ..services_catalog import MIN_PAYMENT_YEN, RELEASE_CREATION, get_service
-from ..textutil import clean_text
+from ..textutil import is_safe_http_url
 
 
 class OrderError(Exception):
@@ -30,8 +31,15 @@ def _fail(message: str):
     raise OrderError(message)
 
 
-def _valid_url(url: str) -> bool:
-    return url.lower().startswith(("http://", "https://")) and len(url) <= 500 and " " not in url
+def _is_checkout_url(url) -> bool:
+    """Stripe の支払い画面の URL か（https の stripe.com のドメインだけを受け付ける）。"""
+    from urllib.parse import urlsplit
+
+    if not isinstance(url, str):
+        return False
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    return parts.scheme == "https" and (host == "stripe.com" or host.endswith(".stripe.com"))
 
 
 # ---- 申込み ----
@@ -43,12 +51,14 @@ def create_order(user: User, service_key: str, materials_url: str | None = None)
     if service.price_yen < MIN_PAYMENT_YEN:
         raise OrderError("このサービスは、いまはお申し込みできません。")
 
-    materials = clean_text(materials_url) if service.needs_materials_url else ""
+    materials = (materials_url or "").strip() if service.needs_materials_url else ""
     if service.needs_materials_url:
         if not materials:
             raise OrderError("素材（写真・動画）の共有リンクを入力してください。")
-        if not _valid_url(materials):
-            raise OrderError("素材の共有リンクは、http:// または https:// で始まる URL を入力してください。")
+        if not is_safe_http_url(materials):
+            raise OrderError(
+                "素材の共有リンクは、http:// または https:// で始まる URL を、空白や改行を含めずに入力してください。"
+            )
 
     if service.key == RELEASE_CREATION:
         if release_service.can_create(user):
@@ -59,6 +69,11 @@ def create_order(user: User, service_key: str, materials_url: str | None = None)
         ).first()
         if existing is not None:
             return existing
+
+    # 申込みの連打で、未払いの注文が増え続けないようにする
+    max_unpaid = current_app.config["MAX_UNPAID_ORDERS"]
+    if Order.query.filter_by(user_id=user.id, status=ORDER_UNPAID).count() >= max_unpaid:
+        raise OrderError("お支払い前の注文が多すぎます。不要な注文を取り消してから、お申し込みください。")
 
     order = Order(
         user_id=user.id,
@@ -72,24 +87,59 @@ def create_order(user: User, service_key: str, materials_url: str | None = None)
     return order
 
 
-def start_checkout(order: Order, attempt: int = 1) -> str:
-    """Stripe の支払い画面の URL を返す。"""
+def _expire_sessions(order: Order) -> None:
+    """この注文の、これまでの支払い画面をすべて無効にする（古い画面で、あとから二重に支払われないように）。"""
+    for row in OrderCheckoutSession.query.filter_by(order_id=order.id).all():
+        payments.expire_checkout_session(row.stripe_session_id)
+
+
+def start_checkout(order: Order) -> str:
+    """Stripe の支払い画面の URL を返す。呼ぶたびに、前の支払い画面は無効になる。"""
     if order.status != ORDER_UNPAID:
         raise OrderError("この注文は、すでにお支払い済みか、取り消されています。")
+
+    # 支払い画面を作った回数を、1回の UPDATE で加える（この値が、Stripe への識別キーの一部になる）
+    rows = db.session.execute(
+        update(Order)
+        .where(Order.id == order.id, Order.status == ORDER_UNPAID)
+        .values(checkout_attempts=Order.checkout_attempts + 1, updated_at=utcnow())
+    ).rowcount
+    db.session.commit()
+    if rows != 1:
+        db.session.refresh(order)
+        raise OrderError("この注文は、すでにお支払い済みか、取り消されています。")
+    db.session.refresh(order)
+    attempt = order.checkout_attempts
+
+    _expire_sessions(order)
     success_url = external_url("orders.success", order_id=order.id) + "?session_id={CHECKOUT_SESSION_ID}"
     cancel_url = external_url("orders.cancel", order_id=order.id)
     try:
         session = payments.create_checkout_session(order, order.user.email, success_url, cancel_url, attempt)
     except payments.PaymentError as e:
         raise OrderError("決済を開始できませんでした。しばらくしてから、もう一度お試しください。") from e
-    order.stripe_session_id = session["id"]
+
+    if not _is_checkout_url(session.get("url")) or not session.get("id"):
+        current_app.logger.error("Stripe の応答が想定と違います（注文ID=%s）", order.id)
+        raise OrderError("決済を開始できませんでした。しばらくしてから、もう一度お試しください。")
+
+    # 作っている間に、すでに支払い・取り消しされていたら、この新しい支払い画面は使わない
+    db.session.add(OrderCheckoutSession(order_id=order.id, stripe_session_id=session["id"]))
+    rows = db.session.execute(
+        update(Order)
+        .where(Order.id == order.id, Order.status == ORDER_UNPAID)
+        .values(stripe_session_id=session["id"], updated_at=utcnow())
+    ).rowcount
     db.session.commit()
+    if rows != 1:
+        payments.expire_checkout_session(session["id"])
+        db.session.refresh(order)
+        raise OrderError("この注文は、すでにお支払い済みか、取り消されています。")
     return session["url"]
 
 
 def cancel_unpaid(order: Order) -> bool:
     """未払いの注文だけを取り消す。取り消せたら True。"""
-    session_id = order.stripe_session_id
     rows = db.session.execute(
         update(Order)
         .where(Order.id == order.id, Order.status == ORDER_UNPAID)
@@ -97,8 +147,8 @@ def cancel_unpaid(order: Order) -> bool:
     ).rowcount
     db.session.commit()
     db.session.refresh(order)
-    if rows == 1 and session_id:
-        payments.expire_checkout_session(session_id)  # 取り消したあとに支払われないようにする
+    if rows == 1:
+        _expire_sessions(order)  # 取り消したあとに、どの画面からも支払われないようにする
     return rows == 1
 
 
@@ -129,15 +179,19 @@ def handle_event(event) -> str:
     db.session.commit()  # イベントの記録と、注文の更新を、まとめて確定する
 
     if paid_order_id is not None:
-        from .notifications import notify_order_paid
+        from .notifications import notify_duplicate_payment, notify_order_paid
 
-        notify_order_paid(db.session.get(Order, paid_order_id))
+        order = db.session.get(Order, paid_order_id)
+        if result == "paid":
+            notify_order_paid(order)
+        elif result == "duplicate-payment":
+            notify_duplicate_payment(order, obj.get("payment_intent"))
     return result
 
 
 def _find_order(obj) -> Order | None:
     raw = (obj.get("metadata") or {}).get("order_id") or obj.get("client_reference_id")
-    if not raw or not str(raw).isdigit():
+    if not raw or not str(raw).isdigit() or len(str(raw)) > 12:
         return None
     return db.session.get(Order, int(raw))
 
@@ -149,6 +203,15 @@ def _on_paid(session) -> tuple[str, int | None]:
     if order is None:
         current_app.logger.error("支払いの通知に、対応する注文がありません（セッション=%s）", session.get("id"))
         return "no-order", None
+    # この注文のために作った支払い画面のものか（同じ Stripe アカウントの、別の用途の支払いを取り込まない）
+    known = OrderCheckoutSession.query.filter_by(
+        order_id=order.id, stripe_session_id=session.get("id")
+    ).first()
+    if known is None:
+        current_app.logger.error(
+            "この注文のものではない支払い画面の通知です（注文ID=%s, セッション=%s）", order.id, session.get("id")
+        )
+        return "session-mismatch", None
     if session.get("amount_total") != order.amount_yen or (session.get("currency") or "").lower() != "jpy":
         # 金額が合わないものは、確定しない（人が確認する）
         current_app.logger.error(
@@ -172,6 +235,14 @@ def _on_paid(session) -> tuple[str, int | None]:
         update(Order).where(Order.id == order.id, Order.status.in_((ORDER_UNPAID, ORDER_CANCELED))).values(**values)
     ).rowcount
     if rows != 1:
+        # すでに支払い済み。別の支払いなら、二重に請求された可能性がある（人が確認して、返金する）
+        db.session.refresh(order)
+        if order.stripe_payment_intent_id and session.get("payment_intent") != order.stripe_payment_intent_id:
+            current_app.logger.error(
+                "二重に支払われた可能性があります（注文ID=%s, 支払い済み=%s, 今回=%s）",
+                order.id, order.stripe_payment_intent_id, session.get("payment_intent"),
+            )
+            return "duplicate-payment", order.id
         return "already-paid", None
     return "paid", order.id
 

@@ -280,7 +280,8 @@ class Order(db.Model):
     __tablename__ = "orders"
     __table_args__ = (
         db.Index("ix_orders_status_created_at", "status", "created_at"),
-        db.CheckConstraint("amount_yen >= 0", name="ck_orders_amount_nonnegative"),
+        # Stripe は、日本円で50円未満の決済ができない
+        db.CheckConstraint("amount_yen >= 50", name="ck_orders_amount_min"),
         db.CheckConstraint(
             "refunded_amount >= 0 AND refunded_amount <= amount_yen", name="ck_orders_refund_within_amount"
         ),
@@ -300,6 +301,7 @@ class Order(db.Model):
     delivery_file_path = db.Column(db.String(500), nullable=True)
     delivery_url = db.Column(db.String(500), nullable=True)
     free_revisions_used = db.Column(db.Integer, nullable=False, default=0)
+    checkout_attempts = db.Column(db.Integer, nullable=False, default=0)  # 支払い画面を作った回数
     stripe_session_id = db.Column(db.String(255), nullable=True, unique=True)
     stripe_payment_intent_id = db.Column(db.String(255), nullable=True, unique=True)
     paid_at = db.Column(db.DateTime, nullable=True)
@@ -307,6 +309,28 @@ class Order(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     user = db.relationship("User", back_populates="orders")
+    checkout_sessions = db.relationship(
+        "OrderCheckoutSession", back_populates="order", cascade="all, delete-orphan"
+    )
+
+
+class OrderCheckoutSession(db.Model):
+    """注文のために作った Stripe の支払い画面（Checkout セッション）の履歴。
+
+    支払いの通知が、この注文のために作ったセッションのものかを確認したり、
+    古いセッションをまとめて無効にしたりするために使う。
+    """
+
+    __tablename__ = "order_checkout_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(
+        db.Integer, db.ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    stripe_session_id = db.Column(db.String(255), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    order = db.relationship("Order", back_populates="checkout_sessions")
 
 
 class StripeEvent(db.Model):
