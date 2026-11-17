@@ -20,6 +20,10 @@ def create_app(config_name: str | None = None) -> Flask:
     if hasattr(config_class, "validate"):
         config_class.validate()
 
+    from .services_catalog import validate_price_overrides
+
+    validate_price_overrides()
+
     app = Flask(__name__)
     app.config.from_object(config_class)
 
@@ -43,6 +47,7 @@ def create_app(config_name: str | None = None) -> Flask:
     from .auth import bp as auth_bp
     from .files import bp as files_bp
     from .main import bp as main_bp
+    from .orders import bp as orders_bp
     from .profile import bp as profile_bp
     from .releases import bp as releases_bp
 
@@ -51,9 +56,11 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(releases_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(files_bp)
+    app.register_blueprint(orders_bp)
     app.register_blueprint(admin_bp)
 
     STATUS_LABELS = {"draft": "下書き", "pending": "承認待ち", "approved": "承認済み", "rejected": "差し戻し"}
+    app.jinja_env.filters["yen"] = lambda n: f"{n:,}円"
     app.jinja_env.filters["status_label"] = lambda status: STATUS_LABELS.get(status, status)
     return app
 

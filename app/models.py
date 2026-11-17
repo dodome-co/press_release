@@ -52,6 +52,8 @@ class User(UserMixin, db.Model):
         foreign_keys="Release.user_id",
         cascade="all, delete-orphan",
     )
+    # 注文は、ユーザーを削除しても残す（user_id が空になる）。ORM でも、消さずに切り離す
+    orders = db.relationship("Order", back_populates="user", passive_deletes=False)
 
     @staticmethod
     def normalize_email(email: str) -> str:
@@ -260,3 +262,83 @@ class ReleaseEdit(db.Model):
     new_value = db.Column(db.Text, nullable=True)
 
     release = db.relationship("Release", back_populates="edits")
+
+
+# ---- 注文・決済 ----
+ORDER_UNPAID = "unpaid"
+ORDER_PAID = "paid"
+ORDER_CANCELED = "canceled"
+ORDER_REFUNDED = "refunded"
+ORDER_PARTIALLY_REFUNDED = "partially_refunded"
+
+PROGRESS_RECEIVED = "received"
+PROGRESS_IN_PROGRESS = "in_progress"
+PROGRESS_DELIVERED = "delivered"
+
+
+class Order(db.Model):
+    __tablename__ = "orders"
+    __table_args__ = (
+        db.Index("ix_orders_status_created_at", "status", "created_at"),
+        # Stripe は、日本円で50円未満の決済ができない
+        db.CheckConstraint("amount_yen >= 50", name="ck_orders_amount_min"),
+        db.CheckConstraint(
+            "refunded_amount >= 0 AND refunded_amount <= amount_yen", name="ck_orders_refund_within_amount"
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    service_type = db.Column(db.String(30), nullable=False)
+    service_name = db.Column(db.String(100), nullable=False)  # 申込み時のサービス名（退会後も分かるように）
+    amount_yen = db.Column(db.Integer, nullable=False)  # 申込み時の金額（税込・円）
+    status = db.Column(db.String(20), nullable=False, default=ORDER_UNPAID, index=True)
+    progress = db.Column(db.String(20), nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
+    refunded_amount = db.Column(db.Integer, nullable=False, default=0)
+    refund_reason = db.Column(db.Text, nullable=True)
+    materials_url = db.Column(db.String(500), nullable=True)  # 動画の素材の共有リンク
+    delivery_file_path = db.Column(db.String(500), nullable=True)
+    delivery_url = db.Column(db.String(500), nullable=True)
+    free_revisions_used = db.Column(db.Integer, nullable=False, default=0)
+    checkout_attempts = db.Column(db.Integer, nullable=False, default=0)  # 支払い画面を作った回数
+    stripe_session_id = db.Column(db.String(255), nullable=True, unique=True)
+    stripe_payment_intent_id = db.Column(db.String(255), nullable=True, unique=True)
+    paid_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    user = db.relationship("User", back_populates="orders")
+    checkout_sessions = db.relationship(
+        "OrderCheckoutSession", back_populates="order", cascade="all, delete-orphan"
+    )
+
+
+class OrderCheckoutSession(db.Model):
+    """注文のために作った Stripe の支払い画面（Checkout セッション）の履歴。
+
+    支払いの通知が、この注文のために作ったセッションのものかを確認したり、
+    古いセッションをまとめて無効にしたりするために使う。
+    """
+
+    __tablename__ = "order_checkout_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(
+        db.Integer, db.ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    stripe_session_id = db.Column(db.String(255), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    order = db.relationship("Order", back_populates="checkout_sessions")
+
+
+class StripeEvent(db.Model):
+    """受け取った Webhook の記録。同じイベントを2回処理しないために使う。"""
+
+    __tablename__ = "stripe_events"
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.String(255), nullable=False, unique=True)
+    event_type = db.Column(db.String(100), nullable=False)
+    received_at = db.Column(db.DateTime, nullable=False, default=utcnow)

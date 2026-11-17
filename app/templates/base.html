@@ -12,6 +12,7 @@
       {% if current_user.is_authenticated %}
         {% if not current_user.is_admin %}
           <a href="{{ url_for('releases.index') }}">プレスリリース</a>
+          <a href="{{ url_for('orders.services') }}">サービス</a>
           <a href="{{ url_for('profile.edit') }}">会員情報</a>
         {% endif %}
         <a href="{{ url_for('main.mypage') }}">マイページ</a>

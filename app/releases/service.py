@@ -9,9 +9,12 @@ from sqlalchemy.exc import IntegrityError
 
 from .. import uploads
 from ..extensions import db
+from ..services_catalog import RELEASE_CREATION
 from ..textutil import clean_text
 from ..models import (
     MAX_PHOTOS,
+    ORDER_PAID,
+    Order,
     RELEASE_APPROVED,
     RELEASE_DRAFT,
     RELEASE_PENDING,
@@ -108,8 +111,20 @@ def free_limit() -> int:
     return current_app.config["FREE_RELEASE_LIMIT"]
 
 
+def count_purchased_slots(user_id: int) -> int:
+    """購入した「リリース作成の追加」の枠の数（支払済みの注文の数）。返金済みは数えない。"""
+    return Order.query.filter_by(
+        user_id=user_id, service_type=RELEASE_CREATION, status=ORDER_PAID
+    ).count()
+
+
+def total_slots(user_id: int) -> int:
+    """初めて提出できる書類の数 ＝ 無料の枠 ＋ 購入した枠。"""
+    return free_limit() + count_purchased_slots(user_id)
+
+
 def can_create(user) -> bool:
-    return count_first_submitted(user.id) < free_limit()
+    return count_first_submitted(user.id) < total_slots(user.id)
 
 
 # ---- 編集できるか（画面の表示用。実際の更新時は、上の _lock で改めて確認する） ----
@@ -127,7 +142,7 @@ def client_can_delete(release: Release) -> bool:
 def create_draft(user) -> Release:
     _lock_user(user.id)
     if not can_create(user):
-        _fail(f"無料で作成できる書類は{free_limit()}件までです。有料サービスをご利用ください。")
+        _fail("無料で作成できる書類の枠を使い切りました。「2件目以降のリリース作成」をご購入ください。")
     limit = current_app.config["DRAFT_LIMIT"]
     if count_drafts(user.id) >= limit:
         _fail(f"下書きは{limit}件までです。不要な下書きを削除するか、提出してください。")
@@ -241,7 +256,7 @@ def submit(release: Release) -> None:
     if first_time:
         _lock_user(release.user_id)  # 同じ人の2件が同時に提出されても、1件ずつ確認する
         if not can_create(release.user):
-            _fail(f"無料で提出できる書類は{free_limit()}件までです。有料サービスをご利用ください。")
+            _fail("無料で提出できる書類の枠を使い切りました。「2件目以降のリリース作成」をご購入ください。")
     now = utcnow()
     if first_time:
         release.first_submitted_at = now  # 一度入れたら変えない

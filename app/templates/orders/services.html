@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}サービスのご案内{% endblock %}
+{% block content %}
+<h1>サービスのご案内</h1>
+<p>料金は税込です。</p>
+{% for s in services %}
+<section>
+  <h2>{{ s.name }}</h2>
+  <p>{{ s.description }}</p>
+  <ul>
+    <li>料金：{{ s.price_yen|yen }}</li>
+    <li>納期の目安：{{ s.lead_time }}</li>
+  </ul>
+  {% if s.key == 'release_creation' and can_create_release %}
+    <p>（無料の枠が残っているので、いまは購入できません。）</p>
+  {% else %}
+  <form action="{{ url_for('orders.order_service', key=s.key) }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if s.needs_materials_url %}
+      <p><label>素材（写真・動画）の共有リンク（必須）<br>
+        <input type="url" name="materials_url" size="60" placeholder="https://" required></label></p>
+    {% endif %}
+    <button type="submit">申し込んで支払う</button>
+  </form>
+  {% endif %}
+</section>
+{% endfor %}
+<h2>キャンセル・返金について</h2>
+<p>{{ refund_policy }}</p>
+<p>お問い合わせ先：{{ support }}</p>
+{% endblock %}
