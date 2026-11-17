@@ -178,13 +178,14 @@ section.hero {
 section.hero .hero-logo { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto 18px; }
 section.hero h1 { border: 0; font-size: 1.5rem; margin-bottom: 10px; padding-bottom: 0; }
 section.hero .tagline {
-  margin: 0 auto 18px;
-  font-size: 1.35rem;
+  margin: 4px auto 18px;
+  font-size: 2.1rem;          /* 大きめの文字 */
   font-weight: 700;
-  line-height: 1.7;
+  line-height: 1.6;
   color: var(--primary);
 }
-section.hero .tagline span { display: block; }
+section.hero .tagline span { display: inline-block; }  /* 文の区切りで、改行する */
+section.hero .hero-lead { font-size: 1.1rem; }
 section.hero p { font-size: 1.02rem; }
 section.hero .hero-actions { margin: 8px 0 12px; }
 section.hero .hero-actions .button { margin: 4px 6px; }
@@ -255,7 +256,7 @@ hr { border: 0; border-top: 1px solid var(--primary-line); margin: 24px 0; }
   main { padding: 20px 14px 40px; }
   main > section, main > form { padding: 16px 16px 6px; }
   h1 { font-size: 1.4rem; }
-  section.hero .tagline { font-size: 1.15rem; }
+  section.hero .tagline { font-size: 1.5rem; }
   .site-header-inner { padding: 8px 14px; }
   table { display: block; overflow-x: auto; }
 }

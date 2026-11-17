@@ -4,8 +4,9 @@
 <section class="hero">
   {% if logo_url %}<img class="hero-logo" src="{{ logo_url }}" alt="ゆきわり。">{% endif %}
   <h1>プレスリリースサポート</h1>
-  <p class="tagline"><span>東北のいいものを、より多くの人たちに。</span><span>地域発の商品を地域のメディアにつなぎます</span></p>
-  <p>元地方紙の記者が、御社のプレスリリースづくりと、記者クラブへの投げ込みを、サポートします。</p>
+  <p class="tagline"><span>東北のいいものを、地域のメディアに。</span><span>より多くの人に。</span></p>
+  <p class="hero-lead">地域に密着し、御社の広報戦略をサポートします。<br>
+    元地方紙の記者が、リリース作成やPR戦略をお手伝いします。</p>
   <p class="hero-actions">
   {% if current_user.is_authenticated %}
     {% if current_user.is_admin %}

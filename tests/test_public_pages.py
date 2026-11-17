@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from app.extensions import db
@@ -24,13 +26,31 @@ def test_top_page_is_public_and_has_the_story(client):
     assert "準備中です" not in body
 
 
-def test_top_page_has_the_tagline_and_the_logo(client):
+def test_top_page_has_the_main_message_and_the_logo(client):
     body = client.get("/").get_data(as_text=True)
-    assert "東北のいいものを、より多くの人たちに。" in body
-    assert "地域発の商品を地域のメディアにつなぎます" in body
-    assert "東北のいいものを、より多くの人たちに。</span><span>地域発の商品を地域のメディアにつなぎます" in body
+    assert "東北のいいものを、地域のメディアに。" in body and "より多くの人に。" in body
+    assert "東北のいいものを、地域のメディアに。</span><span>より多くの人に。" in body
+    assert "地域に密着し、御社の広報戦略をサポートします。" in body
+    assert "元地方紙の記者が、リリース作成やPR戦略をお手伝いします。" in body
     assert 'class="tagline"' in body and 'class="hero-logo"' in body and 'alt="ゆきわり。"' in body
-    assert body.index('class="hero-logo"') < body.index('class="tagline"')
+    # 大きい文字の見出しが先、説明が、そのあと
+    assert body.index('class="hero-logo"') < body.index('class="tagline"') < body.index("地域に密着し")
+
+
+def test_top_page_no_longer_has_the_old_message(client):
+    body = client.get("/").get_data(as_text=True)
+    for old in ("より多くの人たちに", "地域発の商品を地域のメディアにつなぎます",
+                "プレスリリースづくりと、記者クラブへの投げ込みを、サポートします"):
+        assert old not in body, old
+
+
+def test_main_message_is_big(client):
+    from pathlib import Path
+
+    css = Path("app/static/css/style.css").read_text(encoding="utf-8")
+    size = float(re.search(r"section\.hero \.tagline \{[^}]*font-size: ([\d.]+)rem", css).group(1))
+    assert size >= 2.0  # 大きめの文字
+    assert size > float(re.search(r"section\.hero \.hero-lead \{ font-size: ([\d.]+)rem", css).group(1)) * 1.5
 
 
 def test_top_page_buttons_are_styled_as_buttons(client):
@@ -40,9 +60,21 @@ def test_top_page_buttons_are_styled_as_buttons(client):
 
 def test_about_page_tells_the_story_of_yukiwari(client):
     body = client.get("/about").get_data(as_text=True)
-    assert "PR会社「ゆきわり。」は東北生まれの姉弟が運営しています。" in body
-    assert "ロゴはニンニク栽培・販売を営む母のブランドから拝借しています。" in body
-    assert body.index("元地方紙の記者") < body.index("東北生まれの姉弟")  # 会社紹介の中の、キャッチコピーの次
+    assert "「ゆきわり。」は地域密着型のPR会社です。" in body
+    assert "東北生まれで元地方紙記者の姉と、現役の動画編集者の弟が運営しています。" in body
+    assert "社名の由来は、ニンニク栽培・販売を営む母のオリジナルブランド「雪割XXXX」です。" in body
+    assert "ロゴはオリジナルキャラクター「雪割XXXファミリー」を使っています。" in body
+    assert body.index("お手伝いをします") < body.index("地域密着型") < body.index("姉と") < body.index("社名の由来")
+
+
+def test_about_page_no_longer_has_the_old_wording(client):
+    body = client.get("/about").get_data(as_text=True)
+    for old in ("PR代行", "東北生まれの姉弟", "拝借しています", "御社の広報活動をサポートします"):
+        assert old not in body, old
+
+
+def test_business_is_pr_and_public_relations_support(client):
+    assert "<th>主な事業</th><td>広報、PR活動支援</td>" in client.get("/about").get_data(as_text=True)
 
 
 def test_company_name_defaults_to_yukiwari(client):
@@ -75,10 +107,11 @@ def test_about_page_is_public(client):
     res = client.get("/about")
     body = res.get_data(as_text=True)
     assert res.status_code == 200
-    for expected in ("運営者について", "東北のいいもの、新しいサービスを伝えるお手伝いをします", "元地方紙の記者",
-                     "PR代行", "代表者", "横川 鈴", "東北のとある村出身、岩手県在住", "計12年間勤務",
-                     "青森・宮城・岩手県内の記者クラブ", "学芸員、防災士", "動画担当", "Kato Dream", "東北のとある村出身、国外在住",
-                     "都内の映像制作会社に約1年間勤務し、その後独立", "人気 YouTuber などの動画制作"):
+    for expected in ("運営者について", "東北のいいもの、新しいサービスを伝えるお手伝いをします", "地域密着型のPR会社",
+                     "広報、PR活動支援", "代表者", "横川 鈴", "東北のとある村出身、岩手県在住", "計12年間勤務",
+                     "青森・宮城・岩手県内の記者クラブ", "学芸員、防災士", "動画担当", "Kato Dream",
+                     "東北のとある村出身、国外在住", "都内の映像制作会社に約1年間勤務し、その後独立",
+                     "人気 YouTuber などの動画制作"):
         assert expected in body, expected
 
 
@@ -121,14 +154,15 @@ def test_no_personal_contact_details_in_the_repository():
     from pathlib import Path
 
     text = Path("app/templates/about.html").read_text(encoding="utf-8")
-    assert "@" not in text and "XXXX" not in text and "gmail" not in text
+    # 伏せ字の住所（XXXXXXX）やメールアドレスは、載せない。ブランド名の伏せ字（XXXX）は、運営者が指定した表記
+    assert "@" not in text and "gmail" not in text and not re.search(r"X{5,}", text)
 
 
 # ================= ログイン前のサービス一覧 =================
 def test_services_for_visitors_show_everything_but_no_order_forms(client):
     body = client.get("/services").get_data(as_text=True)
     for expected in ("記者発表会の企画・当日の同席", "岩手県内：80,000円", "投げ込み交渉代行", "3,000円",
-                     "10,000円", "30,000円", "キャンセル・返金について", "※リリース作成以外のサービスは、面談が必須となります。"):
+                     "10,000円", "30,000円", "キャンセル・返金について", "リリース作成以外のサービスは、面談が必須となります。"):
         assert expected in body, expected
     assert "申し込んで支払う" not in body and 'name="option"' not in body and "csrf_token" not in body
 

@@ -95,11 +95,12 @@ def test_services_page_lists_all_with_prices_and_policy(client, logged_in):
 
 def test_services_page_notes_come_before_the_price_note(client, logged_in):
     body = client.get("/services").get_data(as_text=True)
-    notes = ("※リリース作成以外のサービスは、面談が必須となります。", "※複数のサービスを申し込む場合は、ご相談ください。",
-             "※その他、ご希望のサービスがあれば、ご相談ください。")
+    notes = ("リリース作成以外のサービスは、面談が必須となります。", "複数のサービスを申し込む場合は、ご相談ください。",
+             "その他、ご希望のサービスがあれば、ご相談ください。")
     price = "料金は税込です。"
     positions = [body.index(n) for n in notes]
     assert positions == sorted(positions) and positions[-1] < body.index(price)  # 3つの注意書きが、順に並び、税込の説明より前
+    assert "<li>※" not in body  # 先頭の「※」は付けない
 
 
 def test_services_page_shows_regional_prices_as_a_choice(client, logged_in):

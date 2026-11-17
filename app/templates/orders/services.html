@@ -3,7 +3,7 @@
 {% block content %}
 <h1>サービスのご案内</h1>
 <ul>
-  {% for note in notes %}<li>※{{ note }}</li>{% endfor %}
+  {% for note in notes %}<li>{{ note }}</li>{% endfor %}
 </ul>
 <p>料金は税込です。</p>
 {% for s in services %}
