@@ -35,22 +35,39 @@ class ReleaseError(Exception):
 # 提出時に必ず埋まっている必要がある項目（項目名 → 表示名）
 REQUIRED_FOR_SUBMIT = {
     "title": "タイトル",
-    "event_at_text": "日時",
+    "event_date": "取材会の日付",
+    "event_start_time": "開始時刻",
     "location": "場所",
     "service_description": "サービスや商品の概要",
     "feature_1": "特徴1",
     "application_method": "取材の申込方法",
-    "application_deadline": "申込の締切",
+    "application_deadline_at": "申込の締切",
     "source_what": "取材してほしい内容",
     "source_why": "なぜ今これを行うのか",
     "source_message": "伝えたいこと",
 }
 
+# 日付・時刻の項目（文字列ではなく、日付型・時刻型で持つ）
+DATE_FIELDS = ("event_date", "event_start_time", "event_end_time", "application_deadline_at")
+
+
+def _display(release: Release, name: str) -> str:
+    """編集履歴に残す、項目の値の文字列。"""
+    if name == "event_date":
+        return release.event_at_display
+    if name == "application_deadline_at":
+        return release.application_deadline_display
+    value = getattr(release, name)
+    if name in ("event_start_time", "event_end_time"):
+        return "" if value is None else value.strftime("%H:%M")
+    return value or ""
+
+
 # クライアントが編集できる項目
 CLIENT_FIELDS = (
-    "title", "event_at_text", "location", "service_description",
+    "title", "event_date", "event_start_time", "event_end_time", "location", "service_description",
     "feature_1", "feature_2", "feature_3",
-    "application_method", "application_deadline",
+    "application_method", "application_deadline_at",
     "source_what", "source_why", "source_message",
 )
 
@@ -168,7 +185,7 @@ def update_fields(release: Release, values: dict) -> None:
         _check_title(values["title"])
     for name in CLIENT_FIELDS:
         if name in values:
-            setattr(release, name, clean_text(values[name]))
+            setattr(release, name, values[name] if name in DATE_FIELDS else clean_text(values[name]))
 
 
 def replace_schedule(release: Release, rows: list[tuple[str, str]]) -> None:
@@ -244,7 +261,11 @@ def delete_draft(release: Release) -> None:
 
 # ---- 提出 ----
 def missing_required(release: Release) -> list[str]:
-    return [label for name, label in REQUIRED_FOR_SUBMIT.items() if not (getattr(release, name) or "").strip()]
+    def empty(name: str) -> bool:
+        value = getattr(release, name)
+        return value is None if name in DATE_FIELDS else not (value or "").strip()
+
+    return [label for name, label in REQUIRED_FOR_SUBMIT.items() if empty(name)]
 
 
 def submit(release: Release) -> None:
@@ -268,11 +289,11 @@ def submit(release: Release) -> None:
 
 # ---- 管理者の操作（承認待ちの書類だけ） ----
 ADMIN_FIELDS = (
-    "title", "event_at_text", "location", "service_description",
+    "title", "event_date", "event_start_time", "event_end_time", "location", "service_description",
     "feature_1", "feature_2", "feature_3",
-    "application_method", "application_deadline",
+    "application_method", "application_deadline_at",
 )
-FIELD_LABELS = {**REQUIRED_FOR_SUBMIT, "feature_2": "特徴2", "feature_3": "特徴3", "summary": "要旨（前文）",
+FIELD_LABELS = {**REQUIRED_FOR_SUBMIT, "event_end_time": "終了時刻", "feature_2": "特徴2", "feature_3": "特徴3", "summary": "要旨（前文）",
                 "schedule": "当日のスケジュール", "photos": "写真"}
 
 
@@ -295,16 +316,19 @@ def admin_update(release: Release, admin, values: dict, schedule_rows: list[tupl
         _check_title(values["title"])
     changed: list[str] = []
 
-    def apply(field: str, new_value: str) -> None:
-        old = getattr(release, field) or ""
+    def apply(field: str, new_value) -> None:
+        old = getattr(release, field)
+        if field not in DATE_FIELDS:
+            old = old or ""
         if old != new_value:
-            _record_edit(release, admin, field, old, new_value)
+            old_text = _display(release, field)
             setattr(release, field, new_value)
+            _record_edit(release, admin, field, old_text, _display(release, field))
             changed.append(field)
 
     for name in ADMIN_FIELDS:
         if name in values:
-            apply(name, clean_text(values[name]))
+            apply(name, values[name] if name in DATE_FIELDS else clean_text(values[name]))
     apply("summary", clean_text(summary))
 
     old_schedule = _schedule_text(release.schedule_items)

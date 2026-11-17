@@ -42,7 +42,10 @@ def order_service(key):
         flash("申込みの操作が多すぎます。しばらくたってから、もう一度お試しください。", "error")
         return redirect(url_for("orders.services"))
     try:
-        order = service.create_order(current_user, key, request.form.get("materials_url"), request.form.get("option"))
+        order = service.create_order(
+            current_user, key, request.form.get("materials_url"),
+            request.form.get("option"), request.form.get("media"),
+        )
         url = service.start_checkout(order)
     except service.OrderError as e:
         flash(str(e), "error")

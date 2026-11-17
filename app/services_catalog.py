@@ -1,8 +1,8 @@
 """有料サービスの一覧（名前・説明・料金・納期の目安）。DB には置かず、ここに持つ。
 
 料金は仮の金額（公開前に確定する。仕様書 9章）。環境変数で上書きできる。
-- 料金が1つのサービス：PRICE_<サービスの種類>（例：PRICE_VIDEO_CREATION=40000）
-- 地域などで料金が変わるサービス：PRICE_<サービスの種類>_<選択肢>（例：PRICE_INTERVIEW_PLANNING_IWATE=90000）
+- 料金が1つのサービス：PRICE_<サービスの種類>（例：PRICE_ARTICLE_CREATION=10000）
+- 地域などで料金が変わるサービス：PRICE_<サービスの種類>_<選択肢>（例：PRICE_INTERVIEW_PLANNING_IWATE=90000、PRICE_VIDEO_CREATION_WITHIN_1MIN=30000）
 注文には申込み時点の金額を保存するので、変えても過去の注文には影響しない。
 """
 import os
@@ -33,8 +33,12 @@ class PriceOption:
     label: str
     default_price_yen: int  # 仮の金額（税込）
     env_suffix: str
+    consult: bool = False  # 要相談（料金を決められないので、このサイトでは申し込めない）
 
-    def price_yen(self, service_key: str) -> int:
+    def price_yen(self, service_key: str) -> int | None:
+        """この選択肢の料金。要相談の選択肢は None。"""
+        if self.consult:
+            return None
         return _env_price(f"PRICE_{service_key.upper()}_{self.env_suffix}", self.default_price_yen)
 
 
@@ -49,6 +53,9 @@ class Service:
     has_delivery: bool = True  # 納期・進捗・納品がある（リリース作成の追加は「枠」の購入なので、ない）
     options: tuple[PriceOption, ...] = ()  # 選択肢（地域など）で料金が変わるときの、選択肢の一覧
     requires_interview: bool = True  # 管理者との事前面談が必要
+    option_label: str = "開催する地域"  # 選択肢の見出し（地域・動画の長さなど）
+    media: tuple[tuple[str, str], ...] = ()  # 申込み時に1つ選ぶ媒体（キー, 表示名）。料金には関わらない
+    price_from_yen: int | None = None  # 最初の画面に「◯円〜」と載せる金額（選択肢で料金が変わるサービス用）
 
     @property
     def price_yen(self) -> int:
@@ -62,12 +69,12 @@ class Service:
         """申し込む内容（選択肢）に応じた料金。選択肢が必要なのに、正しく選ばれていなければ None。"""
         if self.options:
             option = self.get_option(option_key)
-            return option.price_yen(self.key) if option else None
+            return option.price_yen(self.key) if option else None  # 要相談の選択肢も None
         return self.price_yen
 
     def all_prices(self) -> list[int]:
         if self.options:
-            return [o.price_yen(self.key) for o in self.options]
+            return [p for p in (o.price_yen(self.key) for o in self.options) if p is not None]
         return [self.price_yen]
 
 
@@ -112,9 +119,24 @@ _SERVICES = (
         VIDEO_CREATION,
         "自社媒体などに掲載する動画制作",
         "お預かりした素材（写真・動画）を編集して、動画を制作します（撮影は含みません）。納品は YouTube の限定公開リンクで行います。",
-        30_000,
+        0,
         "お申し込み後、担当者から個別にご案内します。",
         needs_materials_url=True,
+        option_label="動画の長さ",
+        media=(
+            ("youtube", "YouTube"),
+            ("x", "X"),
+            ("instagram", "Instagram"),
+            ("tiktok", "TikTok"),
+            ("other", "その他"),
+        ),
+        price_from_yen=10_000,
+        options=(
+            PriceOption("within_1min", "1分以内", 30_000, "WITHIN_1MIN"),
+            PriceOption("1_to_3min", "1分以上3分未満", 40_000, "1_TO_3MIN"),
+            PriceOption("3_to_8min", "3分以上8分未満", 50_000, "3_TO_8MIN"),
+            PriceOption("8min_or_more", "8分以上、または複数の長さの動画を作る場合", 0, "8MIN_OR_MORE", consult=True),
+        ),
     ),
 )
 
@@ -132,7 +154,7 @@ def _env_names() -> list[str]:
     names = []
     for service in _SERVICES:
         if service.options:
-            names += [f"PRICE_{service.key.upper()}_{o.env_suffix}" for o in service.options]
+            names += [f"PRICE_{service.key.upper()}_{o.env_suffix}" for o in service.options if not o.consult]
         else:
             names.append(f"PRICE_{service.key.upper()}")
     return names

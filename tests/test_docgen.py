@@ -40,9 +40,9 @@ def _storage(data=None):
 
 def test_basic_fields_are_filled(app, client_user):
     text = _text(_doc(_release(client_user)))
-    for expected in ("報道関係者各位", f"【取材のお願い】{FULL['title']}", "要旨です。", FULL["event_at_text"],
+    for expected in ("報道関係者各位", f"【取材のお願い】{FULL['title']}", "要旨です。", "2026年12月1日（火） 14:00〜16:00",
                      FULL["location"], FULL["service_description"], "・速い", FULL["application_method"],
-                     FULL["application_deadline"], "ご来場が難しくなった場合は、お問い合わせ先までご連絡ください", "株式会社テスト",
+                     "2026年11月28日（土） 17:00まで", "ご来場が難しくなった場合は、お問い合わせ先までご連絡ください", "株式会社テスト",
                      "〒123-4567 東京都千代田区1-1-1", "TEL：03-1234-5678", "E-mail：client@example.com"):
         assert expected in text, expected
 

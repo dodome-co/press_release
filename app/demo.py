@@ -6,7 +6,7 @@
 """
 import io
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 from docx import Document
 from flask import current_app
@@ -150,14 +150,16 @@ def _release(user: User, admin: User, *, approved: bool, title: str, days_ago: i
     release = Release(
         user_id=user.id,
         title=title,
-        event_at_text="2026年12月5日（土）14:00〜15:30",
+        event_date=date(2026, 12, 5),
+        event_start_time=time(14, 0),
+        event_end_time=time(15, 30),
         location=f"{user.company_name} 本店（{user.address}）",
         service_description="地元の素材を使った、新しい和菓子のシリーズを発売します。試食会で、作り手が味と製法をご説明します。",
         feature_1="地元産の栗と、岩手の米粉を使用",
         feature_2="砂糖を控えめにした、やさしい甘さ",
         feature_3="お土産にも使える、軽くて持ち運びやすい箱",
         application_method="お問い合わせ先に、メールまたは電話でお申し込みください。",
-        application_deadline="12月3日（木）17:00まで",
+        application_deadline_at=datetime(2026, 12, 3, 17, 0),
         source_what="新シリーズの試食会を、取材してほしい",
         source_why="地元の素材を使った商品で、地域の農家と、観光の活性化につなげたい",
         source_message="伝統の味を、若い世代にも届けたい",
@@ -248,7 +250,8 @@ def _seed_client1(user: User, admin: User) -> None:
     article.delivery_file_path, article.delivery_filename = saved.relative_path, "記事.docx"
     _order(user, "interview_planning", "記者発表会の企画・当日の同席（岩手県内）", 80000, option="iwate",
            progress="in_progress", days_ago=4, due_date=date.today() + timedelta(days=14))
-    video = _order(user, "video_creation", "自社媒体などに掲載する動画制作", 30000, progress="in_progress", days_ago=3,
+    video = _order(user, "video_creation", "自社媒体などに掲載する動画制作（YouTube・1分以内）", 30000, option="within_1min",
+                   service_media="youtube", progress="in_progress", days_ago=3,
                    materials_url="https://drive.example.com/iwate-kashi/materials",
                    status="partially_refunded", refunded_amount=15000)
     db.session.add(OrderRefund(order_id=video.id, amount_yen=15000, reason="policy", status="succeeded",

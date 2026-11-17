@@ -162,7 +162,7 @@ def test_no_personal_contact_details_in_the_repository():
 def test_services_for_visitors_show_everything_but_no_order_forms(client):
     body = client.get("/services").get_data(as_text=True)
     for expected in ("記者発表会の企画・当日の同席", "岩手県内：80,000円", "投げ込み交渉代行", "3,000円",
-                     "10,000円", "30,000円", "キャンセル・返金について", "リリース作成以外のサービスは、面談が必須となります。"):
+                     "10,000円", "10,000円〜", "キャンセル・返金について", "リリース作成以外のサービスは、面談が必須となります。"):
         assert expected in body, expected
     assert "申し込んで支払う" not in body and 'name="option"' not in body and "csrf_token" not in body
 

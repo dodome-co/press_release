@@ -28,7 +28,9 @@
 
   <h2>書類の内容（必要なら修正）</h2>
   {{ field(form.title, placeholder="全角22文字以内") }}
-  {{ field(form.event_at_text) }}
+  {{ field(form.event_date) }}
+  {{ field(form.event_start_time) }}
+  {{ field(form.event_end_time) }}
   {{ field(form.location) }}
   <h3>当日のスケジュール</h3>
   {% for e in form.schedule_errors %}<p class="error">{{ e }}</p>{% endfor %}
@@ -43,7 +45,7 @@
   {{ field(form.feature_2) }}
   {{ field(form.feature_3) }}
   {{ field(form.application_method, rows=3) }}
-  {{ field(form.application_deadline) }}
+  {{ field(form.application_deadline_at) }}
   <button type="submit">保存する</button>
 </form>
 
@@ -84,8 +86,8 @@
 <h2>書類の内容</h2>
 <p>【取材のお願い】{{ release.title }}</p>
 <ul>
-  <li>日時：{{ release.event_at_text }}</li><li>会場：{{ release.location }}</li>
-  <li>申込方法：{{ release.application_method }}</li><li>締切：{{ release.application_deadline }}</li>
+  <li>日時：{{ release.event_at_display }}</li><li>会場：{{ release.location }}</li>
+  <li>申込方法：{{ release.application_method }}</li><li>締切：{{ release.application_deadline_display }}</li>
 </ul>
 <p style="white-space:pre-wrap">{{ release.service_description }}</p>
 {% for photo in release.photos %}

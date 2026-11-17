@@ -29,7 +29,7 @@ def test_five_services_with_provisional_prices(app):
         "interview_planning": [80_000, 90_000, 100_000, 120_000],
         "distribution_proxy": [3_000],
         "article_creation": [10_000],
-        "video_creation": [30_000],
+        "video_creation": [30_000, 40_000, 50_000],  # 8分以上は要相談なので入らない
     }
 
 
@@ -55,8 +55,8 @@ def test_regional_options(app):
 
 
 def test_price_can_be_overridden_by_environment(app, monkeypatch):
-    monkeypatch.setenv("PRICE_VIDEO_CREATION", "40000")
-    assert catalog.get_service("video_creation").price_yen == 40_000
+    monkeypatch.setenv("PRICE_VIDEO_CREATION_WITHIN_1MIN", "35000")
+    assert catalog.get_service("video_creation").price_for("within_1min") == 35_000
     assert catalog.get_service("article_creation").price_yen == 10_000
     monkeypatch.setenv("PRICE_INTERVIEW_PLANNING_FUKUSHIMA_YAMAGATA", "110000")
     assert catalog.get_service("interview_planning").price_for("fukushima_yamagata") == 110_000

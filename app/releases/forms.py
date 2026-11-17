@@ -1,7 +1,7 @@
 from flask import current_app
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField
-from wtforms.validators import Length, ValidationError
+from wtforms import DateField, DateTimeLocalField, StringField, TextAreaField, TimeField
+from wtforms.validators import Length, Optional, ValidationError
 
 from ..models import MAX_SCHEDULE_ITEMS
 from ..textutil import clean_text, display_width
@@ -31,17 +31,29 @@ class ReleaseForm(FlaskForm):
     """書類の入力。下書きとして保存するときは、空の項目があってもよい（提出時に確認する）。"""
 
     title = StringField("タイトル（「【取材のお願い】」に続く部分）", validators=[Length(max=200)])
-    event_at_text = StringField("日時", validators=[Length(max=200)])
+    event_date = DateField("取材会の日付", validators=[Optional()])
+    event_start_time = TimeField("開始時刻", validators=[Optional()])
+    event_end_time = TimeField("終了時刻（任意）", validators=[Optional()])
     location = StringField("場所", validators=[Length(max=300)])
     service_description = TextAreaField("サービスや商品の概要", validators=[_MaxLength("SERVICE_DESCRIPTION_MAX_LENGTH")])
     feature_1 = StringField("特徴1", validators=[Length(max=200)])
     feature_2 = StringField("特徴2", validators=[Length(max=200)])
     feature_3 = StringField("特徴3", validators=[Length(max=200)])
     application_method = TextAreaField("取材の申込方法", validators=[Length(max=300)])
-    application_deadline = StringField("申込の締切", validators=[Length(max=100)])
+    application_deadline_at = DateTimeLocalField("申込の締切（日付と時刻）", validators=[Optional()])
     source_what = TextAreaField("取材してほしい内容", validators=[_MaxLength("INPUT_MAX_LENGTH")])
     source_why = TextAreaField("なぜ今これを行うのか（社会的意義・背景）", validators=[_MaxLength("INPUT_MAX_LENGTH")])
     source_message = TextAreaField("読者・報道関係者に伝えたいこと", validators=[_MaxLength("INPUT_MAX_LENGTH")])
+
+    def validate_event_end_time(self, field):
+        if field.data is not None and self.event_start_time.data is None:
+            raise ValidationError("終了時刻を入れるときは、開始時刻も入力してください。")
+        if field.data is not None and self.event_start_time.data is not None and field.data <= self.event_start_time.data:
+            raise ValidationError("終了時刻は、開始時刻より後にしてください。")
+
+    def validate_event_start_time(self, field):
+        if field.data is not None and self.event_date.data is None:
+            raise ValidationError("時刻を入れるときは、日付も入力してください。")
 
     def validate_title(self, field):
         message = title_length_error(field.data)

@@ -174,7 +174,7 @@ def test_good_materials_urls_are_accepted(url):
 
 
 def test_order_with_multiline_materials_url_is_refused(client, logged_in, gateway):
-    res = client.post("/services/video_creation/order", data={"materials_url": "https://a.example/x\nINJECT"},
+    res = client.post("/services/video_creation/order", data={"media": "youtube", "option": "within_1min", "materials_url": "https://a.example/x\nINJECT"},
                       follow_redirects=True)
     assert "素材の共有リンク" in res.get_data(as_text=True)
     assert Order.query.count() == 0
@@ -246,13 +246,13 @@ def test_testing_config_ignores_keys_from_dotenv(app):
 
 @pytest.mark.parametrize("value", ["5,000", "abc", "0", "49", "-100", "100000000", "1.5"])
 def test_bad_price_override_stops_startup(monkeypatch, value):
-    monkeypatch.setenv("PRICE_VIDEO_CREATION", value)
-    with pytest.raises(RuntimeError, match="PRICE_VIDEO_CREATION"):
+    monkeypatch.setenv("PRICE_VIDEO_CREATION_WITHIN_1MIN", value)
+    with pytest.raises(RuntimeError, match="PRICE_VIDEO_CREATION_WITHIN_1MIN"):
         create_app("testing")
 
 
 def test_good_price_override_is_accepted(monkeypatch):
-    monkeypatch.setenv("PRICE_VIDEO_CREATION", "60000")
+    monkeypatch.setenv("PRICE_VIDEO_CREATION_WITHIN_1MIN", "60000")
     create_app("testing")
 
 

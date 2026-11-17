@@ -10,7 +10,7 @@ from app.releases import service
 from app.uploads import resolve_path
 
 from .conftest import login, make_user, png_bytes
-from .test_releases import FULL
+from .test_releases import FULL, form_data
 
 
 def _pending_release(user, **overrides):
@@ -34,8 +34,9 @@ def pending(client_user):
 
 
 def _edit_data(**overrides):
-    data = {**{k: FULL[k] for k in ("title", "event_at_text", "location", "service_description", "feature_1",
-                                    "feature_2", "feature_3", "application_method", "application_deadline")},
+    data = {**form_data({k: FULL[k] for k in ("title", "event_date", "event_start_time", "event_end_time", "location",
+                                              "service_description", "feature_1", "feature_2", "feature_3",
+                                              "application_method", "application_deadline_at")}),
             "summary": "管理者が書いた要旨です。"}
     data.update(overrides)
     return data
@@ -195,7 +196,7 @@ def test_reject_then_client_edits_and_resubmits(admin_client, client, client_use
     assert pending.status == "rejected" and pending.reject_reason == "写真を足してください"
     login(client, "client@example.com")
     assert "写真を足してください" in client.get(f"/releases/{pending.id}/edit").get_data(as_text=True)
-    client.post(f"/releases/{pending.id}/edit", data={**FULL, "title": "直しました"})
+    client.post(f"/releases/{pending.id}/edit", data=form_data({**FULL, "title": "直しました"}))
     assert client.post(f"/releases/{pending.id}/submit").status_code == 302
     db.session.refresh(pending)
     assert pending.status == "pending" and pending.title == "直しました"
@@ -250,7 +251,7 @@ def test_submit_notifies_admins(app, client, client_user, admin_user):
     login(client, "client@example.com")
     client.post("/releases/new")
     r = Release.query.one()
-    client.post(f"/releases/{r.id}/edit", data=FULL)
+    client.post(f"/releases/{r.id}/edit", data=form_data(FULL))
     client.post(f"/releases/{r.id}/submit")
     mails = [m for m in _mails(app) if m["to"] == "admin@example.com"]
     assert len(mails) == 1 and "承認待ち" in mails[0]["subject"]
@@ -286,3 +287,22 @@ def test_client_sees_admin_changes_on_approved_release(app, admin_client, client
     body = client.get(f"/releases/{pending.id}").get_data(as_text=True)
     assert "管理者が修正した内容" in body and "管理者が直したタイトル" in body
     assert "管理者が書いた要旨です。" in body  # 要旨そのものは表示される
+
+
+def test_admin_date_change_is_recorded_in_edit_history(admin_client, pending):
+    res = admin_client.post(f"/admin/releases/{pending.id}", data=_edit_data(
+        event_date="2026-12-08", application_deadline_at="2026-12-01T12:00"))
+    assert res.status_code == 302
+    db.session.refresh(pending)
+    from datetime import date, datetime
+    assert pending.event_date == date(2026, 12, 8) and pending.application_deadline_at == datetime(2026, 12, 1, 12, 0)
+    rows = {e.field_name: (e.old_value, e.new_value) for e in pending.edits}
+    assert rows["event_date"] == ("2026年12月1日（火） 14:00〜16:00", "2026年12月8日（火） 14:00〜16:00")
+    assert rows["application_deadline_at"][1] == "2026年12月1日（火） 12:00まで"
+    assert "event_start_time" not in rows
+
+
+def test_admin_saving_without_date_change_records_nothing(admin_client, pending):
+    admin_client.post(f"/admin/releases/{pending.id}", data=_edit_data())
+    db.session.refresh(pending)
+    assert [e.field_name for e in pending.edits] == ["summary"]

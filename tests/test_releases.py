@@ -1,5 +1,5 @@
 import io
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 
 import pytest
 
@@ -11,18 +11,35 @@ from .conftest import login, make_user, png_bytes
 
 FULL = {
     "title": "新サービス「テスト」開始",
-    "event_at_text": "2026年12月1日（火）14:00〜16:00",
+    "event_date": date(2026, 12, 1),
+    "event_start_time": time(14, 0),
+    "event_end_time": time(16, 0),
     "location": "東京都千代田区1-1-1 本社",
     "service_description": "テスト用のサービスです。",
     "feature_1": "速い",
     "feature_2": "",
     "feature_3": "",
     "application_method": "お問い合わせ先までメールでお申し込みください。",
-    "application_deadline": "11月28日（金）17:00まで",
+    "application_deadline_at": datetime(2026, 11, 28, 17, 0),
     "source_what": "新サービスの体験会を取材してほしい",
     "source_why": "中小企業の広報の負担が大きいため",
     "source_message": "誰でも簡単に作れることを伝えたい",
 }
+
+
+def form_data(values: dict) -> dict:
+    """モデル用の値（日付型など）を、ブラウザが送る文字列にする。"""
+    out = {}
+    for k, v in values.items():
+        if isinstance(v, datetime):
+            out[k] = v.strftime("%Y-%m-%dT%H:%M")
+        elif isinstance(v, date):
+            out[k] = v.isoformat()
+        elif isinstance(v, time):
+            out[k] = v.strftime("%H:%M")
+        else:
+            out[k] = v
+    return out
 
 
 @pytest.fixture()
@@ -38,7 +55,7 @@ def _new_release(client):
 
 
 def _save(client, release, **overrides):
-    data = {**FULL, **overrides}
+    data = form_data({**FULL, **overrides})
     return client.post(f"/releases/{release.id}/edit", data=data)
 
 
@@ -61,7 +78,7 @@ def test_cannot_see_or_edit_other_users_release(client, logged_in, app):
     db.session.commit()
     assert client.get(f"/releases/{r.id}").status_code == 404
     assert client.get(f"/releases/{r.id}/edit").status_code == 404
-    assert client.post(f"/releases/{r.id}/edit", data=FULL).status_code == 404
+    assert client.post(f"/releases/{r.id}/edit", data=form_data(FULL)).status_code == 404
     assert client.post(f"/releases/{r.id}/submit").status_code == 404
     assert client.post(f"/releases/{r.id}/delete").status_code == 404
     assert client.post(f"/releases/{r.id}/photos", data={"photo": (io.BytesIO(png_bytes()), "a.png")},
@@ -106,8 +123,8 @@ def test_html_is_escaped_in_preview(client, logged_in):
 # ---- スケジュール ----
 def test_schedule_saved_in_order_skipping_blank_rows(client, logged_in):
     release = _new_release(client)
-    data = {**FULL, "schedule_time_1": "14:00", "schedule_content_1": "説明",
-            "schedule_time_3": "15:00", "schedule_content_3": "デモ"}
+    data = form_data({**FULL, "schedule_time_1": "14:00", "schedule_content_1": "説明",
+                      "schedule_time_3": "15:00", "schedule_content_3": "デモ"})
     client.post(f"/releases/{release.id}/edit", data=data)
     db.session.refresh(release)
     assert [(i.position, i.time_text, i.content) for i in release.schedule_items] == [
@@ -116,7 +133,7 @@ def test_schedule_saved_in_order_skipping_blank_rows(client, logged_in):
 
 def test_schedule_requires_both_time_and_content(client, logged_in):
     release = _new_release(client)
-    res = client.post(f"/releases/{release.id}/edit", data={**FULL, "schedule_time_1": "14:00"})
+    res = client.post(f"/releases/{release.id}/edit", data=form_data({**FULL, "schedule_time_1": "14:00"}))
     assert res.status_code == 200
     assert "時間と内容の両方" in res.get_data(as_text=True)
     db.session.refresh(release)
@@ -125,8 +142,8 @@ def test_schedule_requires_both_time_and_content(client, logged_in):
 
 def test_schedule_can_be_cleared(client, logged_in):
     release = _new_release(client)
-    client.post(f"/releases/{release.id}/edit", data={**FULL, "schedule_time_1": "14:00", "schedule_content_1": "説明"})
-    client.post(f"/releases/{release.id}/edit", data=FULL)
+    client.post(f"/releases/{release.id}/edit", data=form_data({**FULL, "schedule_time_1": "14:00", "schedule_content_1": "説明"}))
+    client.post(f"/releases/{release.id}/edit", data=form_data(FULL))
     db.session.refresh(release)
     assert release.schedule_items == []
 
@@ -331,3 +348,57 @@ def test_view_shows_target_days_when_pending(client, logged_in):
     client.post(f"/releases/{release.id}/submit")
     body = client.get(f"/releases/{release.id}").get_data(as_text=True)
     assert "2営業日以内" in body
+
+
+# ---- 日付・時刻の型 ----
+def test_date_columns_use_date_types(app):
+    cols = Release.__table__.c
+    from sqlalchemy import Date, DateTime, Time
+
+    assert isinstance(cols.event_date.type, Date) and not isinstance(cols.event_date.type, DateTime)
+    assert isinstance(cols.event_start_time.type, Time) and isinstance(cols.event_end_time.type, Time)
+    assert isinstance(cols.application_deadline_at.type, DateTime)
+    assert "event_at_text" not in cols and "application_deadline" not in cols
+
+
+def test_dates_are_saved_as_real_dates_and_shown_in_japanese(client, logged_in):
+    release = _new_release(client)
+    _save(client, release)
+    db.session.refresh(release)
+    assert release.event_date == date(2026, 12, 1) and release.event_start_time == time(14, 0)
+    assert release.application_deadline_at == datetime(2026, 11, 28, 17, 0)
+    assert release.event_at_display == "2026年12月1日（火） 14:00〜16:00"
+    assert release.application_deadline_display == "2026年11月28日（土） 17:00まで"
+    assert "2026年12月1日（火） 14:00〜16:00" in client.get(f"/releases/{release.id}").get_data(as_text=True)
+
+
+def test_end_time_is_optional(client, logged_in):
+    release = _new_release(client)
+    _save(client, release, event_end_time="")
+    db.session.refresh(release)
+    assert release.event_end_time is None and release.event_at_display == "2026年12月1日（火） 14:00〜"
+
+
+@pytest.mark.parametrize("overrides, message", [
+    ({"event_date": "令和8年12月1日"}, "日付"),
+    ({"event_date": "2026-02-30"}, "日付"),
+    ({"event_start_time": "25:00"}, "時刻"),
+    ({"application_deadline_at": "11月28日まで"}, "日付"),
+    ({"event_end_time": "13:00"}, "開始時刻より後"),
+    ({"event_start_time": "", "event_end_time": "16:00"}, "開始時刻も入力"),
+    ({"event_date": ""}, "日付も入力"),
+])
+def test_invalid_dates_are_rejected_and_not_saved(client, logged_in, overrides, message):
+    release = _new_release(client)
+    res = _save(client, release, **overrides)
+    assert res.status_code == 200 and message in res.get_data(as_text=True)
+    db.session.refresh(release)
+    assert release.event_date is None
+
+
+def test_date_fields_are_required_for_submit(client, logged_in):
+    release = _new_release(client)
+    _save(client, release, event_date="", event_start_time="", event_end_time="", application_deadline_at="")
+    db.session.refresh(release)
+    missing = service.missing_required(release)
+    assert "取材会の日付" in missing and "開始時刻" in missing and "申込の締切" in missing

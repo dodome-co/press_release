@@ -12,7 +12,9 @@
   {{ form.hidden_tag() }}
   <h2>基本情報</h2>
   {{ field(form.title, placeholder="全角22文字以内") }}
-  {{ field(form.event_at_text, placeholder="例：2026年12月1日（火）14:00〜16:00") }}
+  {{ field(form.event_date) }}
+  {{ field(form.event_start_time) }}
+  {{ field(form.event_end_time) }}
   {{ field(form.location) }}
 
   <h2>当日のスケジュール（任意・最大5行）</h2>
@@ -32,7 +34,7 @@
 
   <h2>取材のお申し込み</h2>
   {{ field(form.application_method, rows=3) }}
-  {{ field(form.application_deadline, placeholder="例：12月1日（月）17:00まで") }}
+  {{ field(form.application_deadline_at) }}
 
   <h2>要旨の元になる情報（各500文字まで）</h2>
   <p>管理者が、ここに書かれた内容をもとに、リリースの冒頭の文章（要旨）を作成します。</p>
