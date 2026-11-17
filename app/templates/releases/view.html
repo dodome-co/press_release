@@ -26,7 +26,7 @@
 {% if release.summary %}<p>{{ release.summary }}</p>{% else %}<p>（要旨は、管理者が作成します）</p>{% endif %}
 
 <h3>日時・会場</h3>
-<ul><li>日時：{{ release.event_at_text }}</li><li>会場：{{ release.location }}</li></ul>
+<ul><li>日時：{{ release.event_at_display }}</li><li>会場：{{ release.location }}</li></ul>
 
 {% if release.schedule_items %}
 <h3>当日のスケジュール</h3>
@@ -48,7 +48,7 @@
 {% endif %}
 
 <h3>取材のお申し込み</h3>
-<ul><li>方法：{{ release.application_method }}</li><li>締切：{{ release.application_deadline }}</li></ul>
+<ul><li>方法：{{ release.application_method }}</li><li>締切：{{ release.application_deadline_display }}</li></ul>
 
 <h3>要旨の元になる情報</h3>
 <p>取材してほしい内容：<br><span style="white-space:pre-wrap">{{ release.source_what }}</span></p>

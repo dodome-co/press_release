@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from .datefmt import format_deadline, format_event_at
 from .extensions import db
 
 
@@ -157,14 +158,16 @@ class Release(db.Model):
         db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     title = db.Column(db.String(200), nullable=False, default="")
-    event_at_text = db.Column(db.String(200), nullable=False, default="")  # 取材会の日時（自由な文字列）
+    event_date = db.Column(db.Date, nullable=True)  # 取材会の日付
+    event_start_time = db.Column(db.Time, nullable=True)  # 開始時刻
+    event_end_time = db.Column(db.Time, nullable=True)  # 終了時刻（任意）
     location = db.Column(db.String(300), nullable=False, default="")
     service_description = db.Column(db.Text, nullable=False, default="")
     feature_1 = db.Column(db.String(200), nullable=False, default="")
     feature_2 = db.Column(db.String(200), nullable=False, default="")
     feature_3 = db.Column(db.String(200), nullable=False, default="")
     application_method = db.Column(db.Text, nullable=False, default="")
-    application_deadline = db.Column(db.String(100), nullable=False, default="")
+    application_deadline_at = db.Column(db.DateTime, nullable=True)  # 申込の締切（日本時間のまま保存する）
     # 要旨の元になる情報（クライアントが入力）
     source_what = db.Column(db.Text, nullable=False, default="")
     source_why = db.Column(db.Text, nullable=False, default="")
@@ -204,6 +207,16 @@ class Release(db.Model):
         cascade="all, delete-orphan",
         order_by="ReleaseEdit.id",
     )
+
+    @property
+    def event_at_display(self) -> str:
+        """取材会の日時を「2026年12月1日（火）14:00〜16:00」の形にする。"""
+        return format_event_at(self.event_date, self.event_start_time, self.event_end_time)
+
+    @property
+    def application_deadline_display(self) -> str:
+        """申込の締切を「2026年11月28日（金）17:00まで」の形にする。"""
+        return format_deadline(self.application_deadline_at)
 
     @property
     def features(self) -> list[str]:
@@ -295,7 +308,8 @@ class Order(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     service_type = db.Column(db.String(30), nullable=False)
     service_name = db.Column(db.String(100), nullable=False)  # 申込み時のサービス名（退会後も分かるように）
-    service_option = db.Column(db.String(30), nullable=True)  # 料金が変わる選択肢（地域など）。ないサービスは空
+    service_option = db.Column(db.String(30), nullable=True)  # 料金が変わる選択肢（地域・動画の長さなど）。ないサービスは空
+    service_media = db.Column(db.String(30), nullable=True)  # 動画を出す媒体（YouTube・X など）。動画以外は空
     amount_yen = db.Column(db.Integer, nullable=False)  # 申込み時の金額（税込・円）
     status = db.Column(db.String(20), nullable=False, default=ORDER_UNPAID, index=True)
     progress = db.Column(db.String(20), nullable=True)

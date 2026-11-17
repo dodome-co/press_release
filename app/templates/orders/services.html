@@ -3,7 +3,7 @@
 {% block content %}
 <h1>サービスのご案内</h1>
 <ul>
-  {% for note in notes %}<li>※{{ note }}</li>{% endfor %}
+  {% for note in notes %}<li>{{ note }}</li>{% endfor %}
 </ul>
 <p>料金は税込です。</p>
 {% for s in services %}
@@ -11,8 +11,10 @@
   <h2>{{ s.name }}</h2>
   <p>{{ s.description }}</p>
   <ul>
-    {% if s.options %}
-      <li>料金（開催する地域による）：
+    {% if s.price_from_yen %}
+      <li>料金：{{ s.price_from_yen|yen }}〜（{{ s.option_label }}などにより異なります）</li>
+    {% elif s.options %}
+      <li>料金（{{ s.option_label }}による）：
         <ul>{% for o in s.options %}<li>{{ o.label }}：{{ o.price_yen(s.key)|yen }}</li>{% endfor %}</ul>
       </li>
     {% else %}
@@ -31,10 +33,21 @@
   {% else %}
   <form action="{{ url_for('orders.order_service', key=s.key) }}" method="post">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if s.media %}
+      <p>どの媒体に出したいですか？（必須・1つ選択）<br>
+        {% for key, label in s.media %}
+        <label><input type="radio" name="media" value="{{ key }}" required> {{ label }}</label><br>
+        {% endfor %}
+      </p>
+    {% endif %}
     {% if s.options %}
-      <p>開催する地域（必須）：<br>
+      <p>{{ s.option_label }}（必須）：<br>
         {% for o in s.options %}
+          {% if o.consult %}
+        <label><input type="radio" disabled> {{ o.label }}：要相談（お問い合わせ先：{{ support }}）</label><br>
+          {% else %}
         <label><input type="radio" name="option" value="{{ o.key }}" required> {{ o.label }}（{{ o.price_yen(s.key)|yen }}）</label><br>
+          {% endif %}
         {% endfor %}
       </p>
     {% endif %}

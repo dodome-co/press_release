@@ -18,7 +18,7 @@ from ..models import (
 )
 from ..releases import service as release_service
 from ..security import external_url
-from ..services_catalog import MIN_PAYMENT_YEN, RELEASE_CREATION, get_service
+from ..services_catalog import MIN_PAYMENT_YEN, RELEASE_CREATION, get_service, support_contact
 from ..textutil import is_safe_http_url
 
 
@@ -43,19 +43,38 @@ def _is_checkout_url(url) -> bool:
 
 
 # ---- 申込み ----
-def create_order(user: User, service_key: str, materials_url: str | None = None, option: str | None = None) -> Order:
+def create_order(
+    user: User,
+    service_key: str,
+    materials_url: str | None = None,
+    option: str | None = None,
+    media: str | None = None,
+) -> Order:
     """未払いの注文を作る（金額は、サービスの一覧から取る。画面の値は使わない）。
 
-    option は、地域などで料金が変わるサービスの選択肢（選択肢のないサービスでは、無視する）。
+    option は、地域・動画の長さなどで料金が変わるサービスの選択肢（選択肢のないサービスでは、無視する）。
+    media は、動画を出す媒体（媒体を選ぶサービスだけ。1つ選ぶ）。
     """
     service = get_service(service_key)
     if service is None:
         raise OrderError("サービスが見つかりません。")
+    media_key = None
+    media_label = None
+    if service.media:
+        media_label = dict(service.media).get(media)
+        if media_label is None:
+            raise OrderError("どの媒体に出したいかを、1つ選んでください。")
+        media_key = media
     if service.options:
         chosen = service.get_option(option)
         if chosen is None:
-            raise OrderError("開催する地域を選んでください。")
-        price, name, option_key = chosen.price_yen(service.key), f"{service.name}（{chosen.label}）", chosen.key
+            raise OrderError(f"{service.option_label}を選んでください。")
+        if chosen.consult:
+            raise OrderError(
+                f"「{chosen.label}」は、料金を個別にご相談ください（お問い合わせ先：{support_contact()}）。"
+            )
+        detail = "・".join(x for x in (media_label, chosen.label) if x)
+        price, name, option_key = chosen.price_yen(service.key), f"{service.name}（{detail}）", chosen.key
     else:
         price, name, option_key = service.price_yen, service.name, None
     if price < MIN_PAYMENT_YEN:
@@ -90,6 +109,7 @@ def create_order(user: User, service_key: str, materials_url: str | None = None,
         service_type=service.key,
         service_name=name,
         service_option=option_key,
+        service_media=media_key,
         amount_yen=price,
         materials_url=materials or None,
     )

@@ -178,9 +178,9 @@ def test_pending_demo_release_can_be_approved_by_the_admin(demo_app):
     admin = demo_app.test_client()
     login(admin, demo.ADMIN_EMAIL, demo.demo_password())
     res = admin.post(f"/admin/releases/{release.id}", data={
-        "title": release.title, "event_at_text": release.event_at_text, "location": release.location,
+        "title": release.title, "event_date": release.event_date.isoformat(), "event_start_time": "14:00", "event_end_time": "15:30", "location": release.location,
         "service_description": release.service_description, "feature_1": release.feature_1,
-        "application_method": release.application_method, "application_deadline": release.application_deadline,
+        "application_method": release.application_method, "application_deadline_at": "2026-12-03T17:00",
         "summary": "デモの要旨です。"})
     assert res.status_code == 302
     assert admin.post(f"/admin/releases/{release.id}/approve").status_code == 302

@@ -95,11 +95,12 @@ def test_services_page_lists_all_with_prices_and_policy(client, logged_in):
 
 def test_services_page_notes_come_before_the_price_note(client, logged_in):
     body = client.get("/services").get_data(as_text=True)
-    notes = ("※リリース作成以外のサービスは、面談が必須となります。", "※複数のサービスを申し込む場合は、ご相談ください。",
-             "※その他、ご希望のサービスがあれば、ご相談ください。")
+    notes = ("リリース作成以外のサービスは、面談が必須となります。", "複数のサービスを申し込む場合は、ご相談ください。",
+             "その他、ご希望のサービスがあれば、ご相談ください。")
     price = "料金は税込です。"
     positions = [body.index(n) for n in notes]
     assert positions == sorted(positions) and positions[-1] < body.index(price)  # 3つの注意書きが、順に並び、税込の説明より前
+    assert "<li>※" not in body  # 先頭の「※」は付けない
 
 
 def test_services_page_shows_regional_prices_as_a_choice(client, logged_in):
@@ -107,7 +108,7 @@ def test_services_page_shows_regional_prices_as_a_choice(client, logged_in):
     for label, price in (("岩手県内", "80,000円"), ("宮城県・青森県・秋田県", "90,000円"), ("福島県・山形県", "100,000円"),
                          ("その他", "120,000円")):
         assert label in body and price in body
-    assert body.count('name="option"') == 4  # 地域の選択肢は、記者発表会だけ
+    assert body.count('name="option"') == 4 + 3  # 地域（記者発表会）4つと、動画の長さ3つ（要相談は選べない）
 
 
 def test_refund_policy_is_shown_as_a_list(client, logged_in):
@@ -156,10 +157,12 @@ def test_unknown_service_is_404(client, logged_in, gateway):
 
 def test_video_requires_valid_materials_url(client, logged_in, gateway):
     for bad in ("", "  ", "javascript:alert(1)", "ftp://example.com/x", "not a url", "https://a b"):
-        res = client.post("/services/video_creation/order", data={"materials_url": bad}, follow_redirects=True)
+        res = client.post("/services/video_creation/order", data={"media": "youtube", "option": "within_1min", "materials_url": bad},
+                          follow_redirects=True)
         assert "素材" in res.get_data(as_text=True)
     assert Order.query.count() == 0 and gateway["created"] == []
-    res = client.post("/services/video_creation/order", data={"materials_url": "https://drive.example.com/folder/abc"})
+    res = client.post("/services/video_creation/order", data={"media": "youtube", "option": "within_1min",
+                                                                  "materials_url": "https://drive.example.com/folder/abc"})
     assert res.status_code == 303
     assert Order.query.one().materials_url == "https://drive.example.com/folder/abc"
 
@@ -473,3 +476,73 @@ def test_region_price_can_be_overridden_by_environment(client, logged_in, gatewa
     with pytest.raises(RuntimeError, match="PRICE_INTERVIEW_PLANNING_OTHER"):
         create_app("testing")
 
+
+
+# ---- 動画制作（媒体と長さ） ----
+VIDEO_URL = "https://drive.example.com/materials"
+
+
+def test_services_page_shows_video_price_as_from_10000_only(client):
+    body = client.get("/services").get_data(as_text=True)  # ログイン前
+    assert "10,000円〜" in body
+    for hidden in ("30,000円", "40,000円", "50,000円"):
+        assert hidden not in body  # 長さごとの料金は、申込みの画面で示す
+
+
+def test_video_form_asks_for_media_then_length(client, logged_in):
+    body = client.get("/services").get_data(as_text=True)
+    assert "どの媒体に出したいですか？" in body
+    for label in ("YouTube", "X", "Instagram", "TikTok", "その他"):
+        assert f"> {label}</label>" in body
+    assert body.count('name="media"') == 5
+    for text in ("1分以内（30,000円）", "1分以上3分未満（40,000円）", "3分以上8分未満（50,000円）"):
+        assert text in body
+    assert "8分以上、または複数の長さの動画を作る場合：要相談" in body
+
+
+@pytest.mark.parametrize("option, media, price, name", [
+    ("within_1min", "youtube", 30000, "自社媒体などに掲載する動画制作（YouTube・1分以内）"),
+    ("1_to_3min", "x", 40000, "自社媒体などに掲載する動画制作（X・1分以上3分未満）"),
+    ("3_to_8min", "tiktok", 50000, "自社媒体などに掲載する動画制作（TikTok・3分以上8分未満）"),
+    ("within_1min", "other", 30000, "自社媒体などに掲載する動画制作（その他・1分以内）"),
+])
+def test_video_price_depends_on_length_and_media_is_saved(client, logged_in, gateway, option, media, price, name):
+    res = client.post("/services/video_creation/order",
+                      data={"option": option, "media": media, "materials_url": VIDEO_URL, "amount_yen": "1"})
+    assert res.status_code == 303
+    order = Order.query.one()
+    assert order.amount_yen == price and order.service_option == option and order.service_media == media
+    assert order.service_name == name and gateway["created"][0]["amount"] == price
+
+
+def test_video_over_8_minutes_is_consultation_only(client, logged_in, gateway):
+    res = client.post("/services/video_creation/order",
+                      data={"option": "8min_or_more", "media": "youtube", "materials_url": VIDEO_URL},
+                      follow_redirects=True)
+    assert "料金を個別にご相談ください" in res.get_data(as_text=True)
+    assert Order.query.count() == 0 and gateway["created"] == []
+
+
+@pytest.mark.parametrize("media", [None, "", "facebook", "YouTube", "youtube ", "<script>"])
+def test_video_requires_exactly_one_valid_media(client, logged_in, gateway, media):
+    data = {"option": "within_1min", "materials_url": VIDEO_URL}
+    if media is not None:
+        data["media"] = media
+    res = client.post("/services/video_creation/order", data=data, follow_redirects=True)
+    assert "どの媒体に出したいか" in res.get_data(as_text=True)
+    assert Order.query.count() == 0 and gateway["created"] == []
+
+
+def test_video_requires_a_valid_length(client, logged_in, gateway):
+    for option in (None, "", "tokyo"):
+        data = {"media": "youtube", "materials_url": VIDEO_URL}
+        if option is not None:
+            data["option"] = option
+        res = client.post("/services/video_creation/order", data=data, follow_redirects=True)
+        assert "動画の長さを選んでください" in res.get_data(as_text=True)
+    assert Order.query.count() == 0
+
+
+def test_media_is_ignored_for_other_services(client, logged_in, gateway):
+    client.post("/services/article_creation/order", data={"media": "youtube"})
+    assert Order.query.one().service_media is None
