@@ -84,6 +84,21 @@ def test_services_page_lists_all_with_prices_and_policy(client, logged_in):
     for price in ("60,000円", "50,000円", "10,000円", "20,000円"):
         assert price in body
     assert "キャンセル・返金について" in body and "全額" in body and "50%" in body
+    assert "当日、取材するメディアが一件もなければ、全額返金します" in body
+
+
+def test_services_page_says_interview_comes_before_the_price_note(client, logged_in):
+    body = client.get("/services").get_data(as_text=True)
+    notice, price = "いずれも管理者との事前面談が必要となります。", "料金は税込です。"
+    assert notice in body and price in body
+    assert body.index(notice) < body.index(price)
+
+
+def test_refund_policy_is_shown_as_a_list(client, logged_in):
+    body = client.get("/services").get_data(as_text=True)
+    section = body[body.index("キャンセル・返金について"):]
+    assert section.count("<li>") >= 7  # 見出し4つ＋その下の3つ
+    assert "なお、" not in section  # 分かりにくかった「なお」以下の1文は、項目に分けた
     assert "お問い合わせ先：（準備中）" in body
 
 

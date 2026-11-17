@@ -46,9 +46,18 @@ def test_unknown_service_is_none(app):
     assert catalog.get_service("nope") is None
 
 
-def test_refund_policy_mentions_both_rules(app):
+def test_refund_policy_text_covers_every_rule(app):
     text = catalog.refund_policy_text()
-    assert "全額" in text and "50%" in text and "納品済み" in text and "使った枠は返金できません" in text
+    for expected in ("全額を返金します", "50%を返金します", "「納品済み」：返金できません",
+                     "当日、取材するメディアが一件もなければ、全額返金します",
+                     "すでに書類の提出に使った分は、返金できません", "お問い合わせ先までご連絡ください"):
+        assert expected in text, expected
+
+
+def test_media_zero_rule_is_only_for_interview_planning(app):
+    policy = dict(catalog.REFUND_POLICY)
+    heading = next(h for h in policy if "メディアが一件もなければ" in h)
+    assert heading.startswith("取材会の企画支援は")  # ほかのサービスには適用されない
 
 
 # ---- 注文のモデル ----
