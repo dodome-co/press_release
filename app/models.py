@@ -324,6 +324,18 @@ class Order(db.Model):
     )
 
 
+class RateLimitEvent(db.Model):
+    """回数制限のための記録（app/ratelimit.py）。相手を特定する値は、ハッシュにして保存する。"""
+
+    __tablename__ = "rate_limit_events"
+    __table_args__ = (db.Index("ix_rate_limit_scope_key_created", "scope", "key_hash", "created_at"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    scope = db.Column(db.String(30), nullable=False)
+    key_hash = db.Column(db.String(64), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow, index=True)
+
+
 class MailLog(db.Model):
     """送らなかったメールの記録（デモ用。MAIL_BACKEND=database のとき）。再設定のリンクなどを含むので、管理者だけが見る。"""
 
