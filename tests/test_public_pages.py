@@ -30,11 +30,11 @@ def test_top_page_has_the_main_message_and_the_logo(client):
     body = client.get("/").get_data(as_text=True)
     assert "東北のいいものを、地域のメディアに。" in body and "より多くの人に。" in body
     assert "東北のいいものを、地域のメディアに。</span><span>より多くの人に。" in body
-    assert "地域に密着し、御社の広報戦略をサポートします。" in body
-    assert "元地方紙の記者が、リリース作成やPR戦略をお手伝いします。" in body
+    assert "元地方紙の記者が、御社のリリース作成や地域目線のPR戦略をお手伝いします。" in body
+    assert "地域に密着し、御社の広報戦略をサポートします" not in body
     assert 'class="tagline"' in body and 'class="hero-logo"' in body and 'alt="ゆきわり。"' in body
     # 大きい文字の見出しが先、説明が、そのあと
-    assert body.index('class="hero-logo"') < body.index('class="tagline"') < body.index("地域に密着し")
+    assert body.index('class="hero-logo"') < body.index('class="tagline"') < body.index("元地方紙の記者が")
 
 
 def test_top_page_no_longer_has_the_old_message(client):
@@ -64,7 +64,7 @@ def test_about_page_tells_the_story_of_yukiwari(client):
     assert "東北生まれで元地方紙記者の姉と、現役の動画編集者の弟が運営しています。" in body
     assert "社名の由来は、ニンニク栽培・販売を営む母のオリジナルブランド「雪割XXXX」です。" in body
     assert "ロゴはオリジナルキャラクター「雪割XXXファミリー」を使っています。" in body
-    assert body.index("お手伝いをします") < body.index("地域密着型") < body.index("姉と") < body.index("社名の由来")
+    assert body.index("お手伝いをしたい") < body.index("地域密着型") < body.index("姉と") < body.index("社名の由来")
 
 
 def test_about_page_no_longer_has_the_old_wording(client):
@@ -107,27 +107,18 @@ def test_about_page_is_public(client):
     res = client.get("/about")
     body = res.get_data(as_text=True)
     assert res.status_code == 200
-    for expected in ("運営者について", "東北のいいもの、新しいサービスを伝えるお手伝いをします", "地域密着型のPR会社",
-                     "広報、PR活動支援", "代表者", "横川 鈴", "東北のとある村出身、岩手県在住", "計12年間勤務",
-                     "青森・宮城・岩手県内の記者クラブ", "学芸員、防災士", "動画担当", "Kato Dream",
-                     "東北のとある村出身、国外在住", "都内の映像制作会社に約1年間勤務し、その後独立",
-                     "人気 YouTuber などの動画制作"):
+    for expected in ("運営者について", "東北のいいもの、新しいサービスを伝えるお手伝いをしたい。", "地域密着型のPR会社",
+                     "広報、PR活動支援", "代表者", "横川　琴実", "東北大学経済学部卒業後", "計約１２年間勤務",
+                     "青森、宮城、岩手県内の記者クラブ", "学芸員・防災士資格", "盛岡市在住", "動画制作担当",
+                     "Kato Lund Ayumu", "横浜国立大学経営学部", "2023年からオランダ在住",
+                     "累計再生回数は約4億回"):
         assert expected in body, expected
 
 
-def test_ages_are_shown_as_30s_and_private_details_are_removed(client):
+def test_old_blurred_profiles_are_gone(client):
     body = client.get("/about").get_data(as_text=True)
-    assert body.count("30代") == 2  # 代表者と動画担当の、どちらも
-    for removed in ("旧姓", "鈴木", "琴実", "1992", "1995", "年生まれ", "TOEIC", "805", "Ayumu", "QuizKnock", "Quizknock",
-                    "Nephrite", "２０１４"):
-        assert removed not in body, removed
-
-
-def test_birthplace_residence_and_graduation_years_are_blurred(client):
-    body = client.get("/about").get_data(as_text=True)
-    assert body.count("東北のとある村出身") == 2 and "岩手県在住" in body and "国外在住" in body
-    for removed in ("福島", "盛岡市", "オランダ", "2014", "2019", "2020"):
-        assert removed not in body, removed
+    for old in ("横川 鈴", "Kato Dream", "30代", "東北のとある村出身", "人気 YouTuber"):
+        assert old not in body, old
 
 
 def test_contact_details_come_from_settings_not_from_the_code(client, app):
