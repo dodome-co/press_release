@@ -70,7 +70,7 @@ class User(UserMixin, db.Model):
     @classmethod
     def load_from_session_id(cls, session_id: str) -> "User | None":
         user_id, _, nonce = (session_id or "").partition(":")
-        if not user_id.isdigit() or not nonce:
+        if not (user_id.isascii() and user_id.isdigit()) or not nonce:
             return None
         user = db.session.get(cls, int(user_id))
         if user is None or not secrets.compare_digest(user.session_nonce, nonce):
@@ -299,19 +299,56 @@ class Order(db.Model):
     refund_reason = db.Column(db.Text, nullable=True)
     materials_url = db.Column(db.String(500), nullable=True)  # 動画の素材の共有リンク
     delivery_file_path = db.Column(db.String(500), nullable=True)
+    delivery_filename = db.Column(db.String(255), nullable=True)  # ダウンロードのときの表示名
     delivery_url = db.Column(db.String(500), nullable=True)
     free_revisions_used = db.Column(db.Integer, nullable=False, default=0)
     checkout_attempts = db.Column(db.Integer, nullable=False, default=0)  # 支払い画面を作った回数
     stripe_session_id = db.Column(db.String(255), nullable=True, unique=True)
     stripe_payment_intent_id = db.Column(db.String(255), nullable=True, unique=True)
     paid_at = db.Column(db.DateTime, nullable=True)
+    delivered_at = db.Column(db.DateTime, nullable=True)  # 納品した日時
+    disputed_at = db.Column(db.DateTime, nullable=True)  # 異議申し立て（チャージバック）を受けた日時
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 
     user = db.relationship("User", back_populates="orders")
+    refunds = db.relationship("OrderRefund", back_populates="order", cascade="all, delete-orphan",
+                              order_by="OrderRefund.id")
     checkout_sessions = db.relationship(
         "OrderCheckoutSession", back_populates="order", cascade="all, delete-orphan"
     )
+
+
+REFUND_PENDING = "pending"
+REFUND_SUCCEEDED = "succeeded"
+REFUND_FAILED = "failed"
+
+# 返金の理由（refund_reason）
+REFUND_REASON_POLICY = "policy"  # 返金の基準どおり
+REFUND_REASON_NO_MEDIA = "no_media"  # 取材会の企画支援：当日、取材するメディアが一件もなかった
+REFUND_REASON_SLOT_UNUSED = "slot_unused"  # リリース作成の追加：使っていない枠
+REFUND_REASON_EXTERNAL = "external"  # Stripe の管理画面で直接返金された（通知で反映）
+
+
+class OrderRefund(db.Model):
+    """返金の履歴。1回の返金につき1行。"""
+
+    __tablename__ = "order_refunds"
+    __table_args__ = (db.CheckConstraint("amount_yen > 0", name="ck_order_refunds_amount_positive"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(
+        db.Integer, db.ForeignKey("orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    amount_yen = db.Column(db.Integer, nullable=False)
+    reason = db.Column(db.String(30), nullable=False)
+    note = db.Column(db.Text, nullable=True)  # 管理者のメモ（退会時に消す）
+    status = db.Column(db.String(20), nullable=False, default=REFUND_PENDING)
+    stripe_refund_id = db.Column(db.String(255), nullable=True, unique=True)
+    created_by = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    order = db.relationship("Order", back_populates="refunds")
 
 
 class OrderCheckoutSession(db.Model):

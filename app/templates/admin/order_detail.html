@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}注文の詳細{% endblock %}
+{% block content %}
+<h1>注文の詳細</h1>
+<p><a href="{{ url_for('admin_orders.orders') }}">一覧に戻る</a></p>
+{% if order.disputed_at %}<p class="error">この注文は、カード会社に異議申し立てをされています（{{ order.disputed_at|dt }} UTC）。Stripe の管理画面で確認してください。</p>{% endif %}
+<ul>
+  <li>注文番号：{{ order.id }}</li>
+  <li>サービス：{{ order.service_name }}</li>
+  <li>金額：{{ order.amount_yen|yen }}（税込）／返金済み：{{ order.refunded_amount|yen }}</li>
+  <li>状態：{{ order.status|order_status_label }}</li>
+  {% if has_delivery %}<li>進捗：{{ order.progress|progress_label }}</li>{% endif %}
+  <li>会社：{% if order.user %}{{ order.user.company_name }}（{{ order.user.contact_name }}　{{ order.user.email }}　{{ order.user.phone }}）{% else %}（退会済み）{% endif %}</li>
+  {% if order.paid_at %}<li>お支払い日時（UTC）：{{ order.paid_at|dt }}</li>{% endif %}
+  {% if order.stripe_payment_intent_id %}<li>Stripe の支払い ID：{{ order.stripe_payment_intent_id }}</li>{% endif %}
+  {% if order.materials_url %}<li>素材の共有リンク：{{ order.materials_url }}</li>{% endif %}
+</ul>
+
+<h2>返金</h2>
+{% if order.refunds %}
+<table border="1">
+  <tr><th>日時（UTC）</th><th>金額</th><th>理由</th><th>結果</th><th>メモ</th></tr>
+  {% for r in order.refunds %}
+  <tr><td>{{ r.created_at|dt }}</td><td>{{ r.amount_yen|yen }}</td><td>{{ reason_labels.get(r.reason, r.reason) }}</td>
+      <td>{{ {'pending': '処理中', 'succeeded': '成功', 'failed': '失敗'}.get(r.status, r.status) }}</td><td>{{ r.note or '' }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+{% if order.refunds|selectattr('status', 'equalto', 'pending')|list %}
+<form action="{{ url_for('admin_orders.resolve_refunds', order_id=order.id) }}" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <p>返金が「処理中」のまま残っています。Stripe に問い合わせて、結果を確定します（作ってから{{ config.REFUND_PENDING_MINUTES }}分以上たったものが対象です）。</p>
+  <button type="submit">処理中の返金を確認する</button>
+</form>
+{% endif %}
+{% if refundable %}
+<p>{{ limit.rule }}　あと {{ limit.remaining_yen|yen }} まで返金できます。（これまでの返金：{{ order.refunded_amount|yen }}）</p>
+{% if order.service_type == 'interview_planning' and limit_no_media.remaining_yen > limit.remaining_yen %}
+<p>※「当日、取材するメディアが一件もなかった」を選ぶと、全額（あと {{ limit_no_media.remaining_yen|yen }}）まで返金できます。</p>
+{% endif %}
+{% if limit.remaining_yen > 0 or (order.service_type == 'interview_planning' and limit_no_media.remaining_yen > 0) %}
+<form action="{{ url_for('admin_orders.refund', order_id=order.id) }}" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <p><label>返金額（円）：<input type="number" name="amount_yen" min="1" max="{{ [limit.remaining_yen, limit_no_media.remaining_yen]|max if order.service_type == 'interview_planning' else limit.remaining_yen }}" value="{{ limit.remaining_yen or limit_no_media.remaining_yen }}" required></label></p>
+  {% if order.service_type == 'interview_planning' %}
+  <p><label>理由：<select name="reason">
+    <option value="policy">返金の基準どおり</option>
+    <option value="no_media">当日、取材するメディアが一件もなかった（全額）</option>
+  </select></label></p>
+  {% else %}
+  <input type="hidden" name="reason" value="policy">
+  {% endif %}
+  <p><label>メモ（任意・500文字まで）：<br><textarea name="note" rows="2" cols="60" maxlength="500"></textarea></label></p>
+  <button type="submit">返金する（Stripe で、実際に返金されます）</button>
+</form>
+{% endif %}
+{% else %}
+<p>この注文は、返金できる状態ではありません。</p>
+{% endif %}
+
+{% if has_delivery %}
+<h2>納期・進捗・修正</h2>
+{% if workable %}
+<form action="{{ url_for('admin_orders.set_due_date', order_id=order.id) }}" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>納期日：<input type="date" name="due_date" value="{{ order.due_date or '' }}"></label>
+  <button type="submit">保存する</button>（空にすると解除）
+</form>
+{% if order.progress == 'received' %}
+<form action="{{ url_for('admin_orders.start_work', order_id=order.id) }}" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit">着手にする（返金が50%になります）</button>
+</form>
+{% endif %}
+<form action="{{ url_for('admin_orders.set_revisions', order_id=order.id) }}" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <label>無料の修正を使った回数：<input type="number" name="free_revisions_used" min="0" max="99" value="{{ order.free_revisions_used }}"></label>
+  <button type="submit">保存する</button>
+</form>
+{% else %}
+<p>納期日：{{ order.due_date or '（未定）' }}／修正の回数：{{ order.free_revisions_used }}（この状態では、変更できません）</p>
+{% endif %}
+
+<h2>納品</h2>
+{% if order.delivery_file_path %}<p>納品済み：<a href="{{ url_for('admin_orders.download_delivery', order_id=order.id) }}">{{ order.delivery_filename }}</a>（{{ order.delivered_at|dt }} UTC）</p>{% endif %}
+{% if order.delivery_url %}<p>納品済み：{{ order.delivery_url }}（{{ order.delivered_at|dt }} UTC）</p>{% endif %}
+{% if workable %}
+  {% if order.service_type == 'article_creation' %}
+  <form action="{{ url_for('admin_orders.deliver_article', order_id=order.id) }}" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="file" accept=".pdf,.docx,.txt">
+    <button type="submit">{{ '差し替えて納品する' if order.delivery_file_path else '納品する' }}</button>
+    <p>PDF・Word（.docx）・テキスト（.txt、UTF-8）、10MBまで。納品すると、クライアントにメールが届きます。</p>
+  </form>
+  {% elif order.service_type == 'video_creation' %}
+  <form action="{{ url_for('admin_orders.deliver_video', order_id=order.id) }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>YouTube の限定公開リンク：<input type="url" name="delivery_url" size="60" value="{{ order.delivery_url or '' }}" placeholder="https://www.youtube.com/watch?v=..." required></label>
+    <button type="submit">{{ '差し替えて納品する' if order.delivery_url else '納品する' }}</button>
+  </form>
+  {% else %}
+  {% if order.progress != 'delivered' %}
+  <form action="{{ url_for('admin_orders.mark_delivered', order_id=order.id) }}" method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <p>このサービスは、ファイルやリンクの納品はありません。完了したら、納品済みにします（返金できなくなります）。</p>
+    <button type="submit">納品済みにする</button>
+  </form>
+  {% else %}
+  <p>納品済みです（{{ order.delivered_at|dt }} UTC）。</p>
+  {% endif %}
+  {% endif %}
+{% endif %}
+{% else %}
+<p>この注文には、納期・進捗・納品はありません。</p>
+{% endif %}
+{% endblock %}

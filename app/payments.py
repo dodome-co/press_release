@@ -9,6 +9,14 @@ class PaymentError(Exception):
     """決済の開始などに失敗したとき（利用者には、詳しい理由を見せない）。"""
 
 
+class PaymentRejected(PaymentError):
+    """Stripe が、処理を実行しなかったことが分かっている失敗（入力の誤りなど）。やり直してよい。"""
+
+
+class PaymentUncertain(PaymentError):
+    """通信の途切れなどで、Stripe で処理されたかどうか分からない失敗。結果を確かめるまで、やり直してはいけない。"""
+
+
 def _configure() -> None:
     key = current_app.config["STRIPE_SECRET_KEY"]
     if not key:
@@ -47,6 +55,62 @@ def create_checkout_session(order, customer_email: str, success_url: str, cancel
     except stripe.StripeError as e:
         current_app.logger.error("Checkout セッションを作れませんでした（注文ID=%s）：%s", order.id, type(e).__name__)
         raise PaymentError("決済を開始できませんでした") from e
+
+
+def _is_definitely_not_executed(error: Exception) -> bool:
+    """Stripe が、処理を実行しなかったと言える種類のエラーか（それ以外は、結果が分からないものとして扱う）。"""
+    return isinstance(
+        error,
+        (
+            stripe.InvalidRequestError,
+            stripe.AuthenticationError,
+            stripe.PermissionError,
+            stripe.RateLimitError,
+        ),
+    )
+
+
+def create_refund(payment_intent_id: str, amount_yen: int, idempotency_key: str, metadata: dict | None = None) -> dict:
+    """返金を行う。必要な値だけの普通の dict（id と status）を返す。
+
+    失敗したとき：実行されなかったと分かれば PaymentRejected、結果が分からなければ PaymentUncertain。
+    """
+    _configure()
+    try:
+        refund = stripe.Refund.create(
+            payment_intent=payment_intent_id,
+            amount=amount_yen,
+            reason="requested_by_customer",
+            metadata=metadata or {},
+            idempotency_key=idempotency_key,
+        )
+        return {"id": refund["id"], "status": refund["status"]}
+    except stripe.StripeError as e:
+        current_app.logger.error("返金に失敗しました（支払い=%s, 金額=%s）：%s", payment_intent_id, amount_yen, type(e).__name__)
+        if _is_definitely_not_executed(e):
+            raise PaymentRejected("返金が拒否されました") from e
+        raise PaymentUncertain("返金の結果が確認できませんでした") from e
+
+
+def find_refund(payment_intent_id: str, refund_id: int) -> dict | None:
+    """この支払いの返金から、アプリの返金の行（metadata の refund_id）に対応するものを探す。なければ None。
+
+    Stripe に問い合わせられなかったときは、PaymentUncertain。
+    """
+    _configure()
+    try:
+        for refund in stripe.Refund.list(payment_intent=payment_intent_id, limit=100).auto_paging_iter():
+            # Stripe のオブジェクトは dict の .get() が使えないので、[] で読む
+            try:
+                metadata = refund["metadata"]
+                found = metadata["refund_id"] == str(refund_id)
+            except KeyError:
+                continue
+            if found:
+                return {"id": refund["id"], "status": refund["status"]}
+    except stripe.StripeError as e:
+        raise PaymentUncertain("返金の状況を確認できませんでした") from e
+    return None
 
 
 def expire_checkout_session(session_id: str) -> None:

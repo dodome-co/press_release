@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}マイページ{% endblock %}
+{% block content %}
+<h1>マイページ</h1>
+<ul>
+  <li><a href="{{ url_for('releases.index') }}">プレスリリース</a></li>
+  <li><a href="{{ url_for('mypage.orders') }}">注文履歴</a></li>
+  <li><a href="{{ url_for('profile.edit') }}">会員情報</a></li>
+  <li><a href="{{ url_for('orders.services') }}">サービスのご案内</a></li>
+</ul>
+<h2>最近の注文</h2>
+{% if recent_orders %}
+<ul>
+  {% for o in recent_orders %}
+  <li><a href="{{ url_for('mypage.order_detail', order_id=o.id) }}">{{ o.service_name }}</a>
+    （{{ o.status|order_status_label }}{% if o.progress %}／{{ o.progress|progress_label }}{% endif %}）</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>まだ注文がありません。</p>
+{% endif %}
+{% endblock %}

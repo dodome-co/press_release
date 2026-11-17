@@ -35,6 +35,12 @@ def _release_or_404(release_id: int) -> Release:
     return release
 
 
+@bp.get("/")
+@admin_required
+def index_page():
+    return render_template("admin/index.html")
+
+
 @bp.get("/releases")
 @admin_required
 def releases():

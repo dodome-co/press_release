@@ -113,8 +113,9 @@ def free_limit() -> int:
 
 def count_purchased_slots(user_id: int) -> int:
     """購入した「リリース作成の追加」の枠の数（支払済みの注文の数）。返金済みは数えない。"""
+    # 返金の手続きに入った（返金額を確保した）ものは、数えない。返金が失敗して戻れば、また数える
     return Order.query.filter_by(
-        user_id=user_id, service_type=RELEASE_CREATION, status=ORDER_PAID
+        user_id=user_id, service_type=RELEASE_CREATION, status=ORDER_PAID, refunded_amount=0
     ).count()
 
 

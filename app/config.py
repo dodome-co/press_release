@@ -35,8 +35,12 @@ class Config:
     # お問い合わせ先（メール・案内に載せる）。決まるまでは「準備中」と表示される
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "")
 
+    # 返金が「処理中」のまま残ったものを、Stripe に問い合わせて確定するまでの待ち時間（分）
+    REFUND_PENDING_MINUTES = int(os.environ.get("REFUND_PENDING_MINUTES", "10"))
+
     # 書類の写真は横長だけ（横÷縦がこの値以上）。ロゴには適用しない
     PHOTO_MIN_ASPECT_RATIO = float(os.environ.get("PHOTO_MIN_ASPECT_RATIO", "1.2"))
+    UPLOAD_MAX_DOCUMENT_BYTES = 10 * 1024 * 1024  # 納品する記事のファイル 1つあたり 10MB
     UPLOAD_MAX_PIXELS = 16_000_000  # 極端に大きな画像でメモリを使い切るのを防ぐ（縦×横。約4000×4000）
 
     # 下書きとして同時に持てる書類の数（提出するまでは無料枠に数えないため、増えすぎを防ぐ）

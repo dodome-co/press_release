@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}会員の詳細{% endblock %}
+{% block content %}
+<h1>会員の詳細</h1>
+<p><a href="{{ url_for('admin_users.users') }}">一覧に戻る</a></p>
+<ul>
+  <li>会社：{{ user.company_name }}</li>
+  <li>担当者：{{ user.contact_name }}（{{ user.department or '' }}）</li>
+  <li>メール：{{ user.email }}</li>
+  <li>電話：{{ user.phone }}{% if user.mobile_phone %}／{{ user.mobile_phone }}{% endif %}</li>
+  <li>住所：〒{{ user.postal_code }} {{ user.address }}</li>
+  <li>書類：{{ release_count }}件</li>
+</ul>
+<h2>注文</h2>
+{% if orders %}
+<ul>
+  {% for o in orders %}
+  <li><a href="{{ url_for('admin_orders.detail', order_id=o.id) }}">{{ o.id }}：{{ o.service_name }}</a>（{{ o.status|order_status_label }}／{{ o.progress|progress_label }}）</li>
+  {% endfor %}
+</ul>
+{% else %}<p>注文はありません。</p>{% endif %}
+
+<h2>退会処理</h2>
+<p>クライアントからの問い合わせを受けて行います。次の内容は、<strong>元に戻せません</strong>。</p>
+<ul>
+  <li>削除するもの：会員情報、書類（Word・写真）、ロゴ、納品ファイル、動画の素材リンクと納品リンク</li>
+  <li>残すもの：注文・支払いの記録（金額・日付・サービス名・状態。会員との関連と個人情報は消えます）</li>
+  <li>お支払い前の注文は、取り消されます。</li>
+</ul>
+{% if blockers %}
+  <p class="error">いまは、削除できません。</p>
+  <ul>{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+{% else %}
+<form action="{{ url_for('admin_users.delete', user_id=user.id) }}" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <p><label>確認のため、この会員のメールアドレスを入力してください：<br>
+    <input type="text" name="confirm_email" size="40" autocomplete="off" required></label></p>
+  <button type="submit">削除する</button>
+</form>
+{% endif %}
+{% endblock %}

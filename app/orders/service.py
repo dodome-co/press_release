@@ -176,6 +176,20 @@ def handle_event(event) -> str:
         result, paid_order_id = _on_paid(obj)
     elif event_type == "checkout.session.expired":
         result = _on_expired(obj)
+    elif event_type == "charge.refunded":
+        from .refunds import reconcile_charge_refunded
+
+        result, refunded_order = reconcile_charge_refunded(obj)
+        if result == "external-refund":
+            paid_order_id = refunded_order.id
+    elif event_type == "charge.dispute.created":
+        result, paid_order_id = _on_dispute(obj)
+    elif event_type in ("refund.updated", "refund.failed", "charge.refund.updated"):
+        from .refunds import on_refund_updated
+
+        result, changed_order = on_refund_updated(obj)
+        if result == "failed" and changed_order is not None:
+            paid_order_id = changed_order.id
     db.session.commit()  # イベントの記録と、注文の更新を、まとめて確定する
 
     if paid_order_id is not None:
@@ -186,12 +200,29 @@ def handle_event(event) -> str:
             notify_order_paid(order)
         elif result == "duplicate-payment":
             notify_duplicate_payment(order, obj.get("payment_intent"))
+        elif result == "external-refund":
+            from .notifications import notify_external_refund
+
+            notify_external_refund(order)
+        elif result == "disputed":
+            from .notifications import notify_dispute
+
+            notify_dispute(order)
+        elif result == "failed":
+            from .notifications import notify_refund_failed
+
+            notify_refund_failed(order)
+    if result == "no-order" and event_type in ("charge.refunded", "charge.dispute.created"):
+        # 注文に結びつかない返金・異議申し立て（期限のあるものを見逃さないよう、管理者に知らせる）
+        from .notifications import notify_unmatched_event
+
+        notify_unmatched_event(event_type, obj.get("payment_intent"))
     return result
 
 
 def _find_order(obj) -> Order | None:
     raw = (obj.get("metadata") or {}).get("order_id") or obj.get("client_reference_id")
-    if not raw or not str(raw).isdigit() or len(str(raw)) > 12:
+    if not raw or not (str(raw).isascii() and str(raw).isdigit()) or len(str(raw)) > 12:
         return None
     return db.session.get(Order, int(raw))
 
@@ -245,6 +276,20 @@ def _on_paid(session) -> tuple[str, int | None]:
             return "duplicate-payment", order.id
         return "already-paid", None
     return "paid", order.id
+
+
+def _on_dispute(dispute) -> tuple[str, int | None]:
+    """カード会社への異議申し立て（チャージバック）。自動では何も変えず、印を付けて管理者に知らせる。"""
+    payment_intent = dispute.get("payment_intent")
+    order = Order.query.filter_by(stripe_payment_intent_id=payment_intent).first() if payment_intent else None
+    if order is None:
+        current_app.logger.error("異議申し立ての通知に、対応する注文がありません（支払い=%s）", payment_intent)
+        return "no-order", None
+    current_app.logger.error("異議申し立てを受けました（注文ID=%s）", order.id)
+    if order.disputed_at is None:
+        order.disputed_at = utcnow()
+        return "disputed", order.id
+    return "already-disputed", None
 
 
 def _on_expired(session) -> str:
