@@ -83,7 +83,7 @@ def test_no_media_reason_allows_full_refund_only_for_interview_planning(app, cli
     delivered = _order(client_user, progress="delivered")
     assert refunds.refund_limit(delivered).total_yen == 0
     assert refunds.refund_limit(delivered, "no_media").total_yen == 60000
-    other = _order(client_user, service_type="interview_accompany", progress="delivered", amount=50000)
+    other = _order(client_user, service_type="article_creation", progress="delivered", amount=50000)
     assert refunds.refund_limit(other, "no_media").total_yen == 0
 
 
@@ -142,7 +142,7 @@ def test_no_media_reason_refunds_everything_even_if_delivered(admin_client, clie
 def test_no_media_reason_is_refused_for_other_services(admin_client, client_user, stripe_calls):
     o = _order(client_user, service_type="distribution_proxy", progress="delivered", amount=10000)
     res = _refund(admin_client, o, 10000, reason="no_media")
-    assert "企画支援だけ" in res.get_data(as_text=True)
+    assert "記者発表会の企画・当日の同席だけ" in res.get_data(as_text=True)
     assert stripe_calls == []
 
 

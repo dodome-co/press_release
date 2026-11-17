@@ -79,19 +79,31 @@ def test_services_require_login_and_client_role(client, admin_user):
 
 def test_services_page_lists_all_with_prices_and_policy(client, logged_in):
     body = client.get("/services").get_data(as_text=True)
-    for name in ("取材会の企画支援", "取材会の同行", "投げ込み代行", "記事作成", "動画作成"):
+    for name in ("記者発表会の企画・当日の同席", "投げ込み交渉代行", "自社媒体などに掲載する記事制作",
+                 "自社媒体などに掲載する動画制作"):
         assert name in body
-    for price in ("60,000円", "50,000円", "10,000円", "20,000円"):
+    for price in ("3,000円", "10,000円", "30,000円"):
         assert price in body
+    assert "取材会の同行" not in body  # 記者発表会に統合した
     assert "キャンセル・返金について" in body and "全額" in body and "50%" in body
     assert "当日、取材するメディアが一件もなければ、全額返金します" in body
 
 
-def test_services_page_says_interview_comes_before_the_price_note(client, logged_in):
+def test_services_page_notes_come_before_the_price_note(client, logged_in):
     body = client.get("/services").get_data(as_text=True)
-    notice, price = "いずれも管理者との事前面談が必要となります。", "料金は税込です。"
-    assert notice in body and price in body
-    assert body.index(notice) < body.index(price)
+    notes = ("※リリース作成以外のサービスは、面談が必須となります。", "※複数のサービスを申し込む場合は、ご相談ください。",
+             "※その他、ご希望のサービスがあれば、ご相談ください。")
+    price = "料金は税込です。"
+    positions = [body.index(n) for n in notes]
+    assert positions == sorted(positions) and positions[-1] < body.index(price)  # 3つの注意書きが、順に並び、税込の説明より前
+
+
+def test_services_page_shows_regional_prices_as_a_choice(client, logged_in):
+    body = client.get("/services").get_data(as_text=True)
+    for label, price in (("岩手県内", "80,000円"), ("宮城県・青森県・秋田県", "90,000円"), ("福島県・山形県", "100,000円"),
+                         ("その他", "120,000円")):
+        assert label in body and price in body
+    assert body.count('name="option"') == 4  # 地域の選択肢は、記者発表会だけ
 
 
 def test_refund_policy_is_shown_as_a_list(client, logged_in):
@@ -111,7 +123,7 @@ def test_release_creation_not_purchasable_while_free_slot_remains(client, logged
 def test_release_creation_purchasable_after_free_slot_used(client, logged_in):
     _exhaust_free_slot(logged_in)
     body = client.get("/services").get_data(as_text=True)
-    assert "/services/release_creation/order" in body and "5,000円" in body
+    assert "/services/release_creation/order" in body and "4,000円" in body
 
 
 def test_releases_index_links_to_purchase_when_exhausted(client, logged_in):
@@ -122,13 +134,13 @@ def test_releases_index_links_to_purchase_when_exhausted(client, logged_in):
 
 # ---- 申込み ----
 def test_order_uses_server_side_price_and_redirects_to_stripe(client, logged_in, gateway):
-    res = client.post("/services/interview_planning/order", data={"amount_yen": "1", "amount": "1"})
+    res = client.post("/services/distribution_proxy/order", data={"amount_yen": "1", "amount": "1"})
     assert res.status_code == 303 and res.headers["Location"] == "https://checkout.stripe.com/c/pay/1-1"
     order = Order.query.one()
-    assert (order.amount_yen, order.status, order.user_id) == (60000, "unpaid", logged_in.id)
+    assert (order.amount_yen, order.status, order.user_id) == (3000, "unpaid", logged_in.id)
     assert order.stripe_session_id == "cs_test_1_1"
     call = gateway["created"][0]
-    assert call["amount"] == 60000 and call["email"] == "client@example.com"  # 画面から送った金額は使われない
+    assert call["amount"] == 3000 and call["email"] == "client@example.com"  # 画面から送った金額は使われない
     assert call["success"].endswith("?session_id={CHECKOUT_SESSION_ID}")
     assert call["cancel"].endswith("/orders/1/cancel")
 
@@ -172,7 +184,7 @@ def test_stripe_failure_is_a_message_not_a_500(client, logged_in, monkeypatch):
         raise payments.PaymentError("x")
 
     monkeypatch.setattr(payments, "create_checkout_session", boom)
-    res = client.post("/services/interview_planning/order", follow_redirects=True)
+    res = client.post("/services/distribution_proxy/order", follow_redirects=True)
     assert res.status_code == 200 and "決済を開始できませんでした" in res.get_data(as_text=True)
     assert Order.query.one().status == "unpaid"
 
@@ -415,3 +427,45 @@ def test_production_requires_stripe_settings(monkeypatch):
     monkeypatch.setattr(ProductionConfig, "STRIPE_WEBHOOK_SECRET", "")
     with pytest.raises(RuntimeError, match="STRIPE"):
         create_app("production")
+
+
+# ---- 記者発表会の企画・当日の同席（地域で料金が変わる） ----
+@pytest.mark.parametrize("option,label,price", [
+    ("iwate", "岩手県内", 80000),
+    ("miyagi_aomori_akita", "宮城県・青森県・秋田県", 90000),
+    ("fukushima_yamagata", "福島県・山形県", 100000),
+    ("other", "その他", 120000),
+])
+def test_press_conference_price_depends_on_region(client, logged_in, gateway, option, label, price):
+    res = client.post("/services/interview_planning/order", data={"option": option, "amount_yen": "1"})
+    assert res.status_code == 303
+    order = Order.query.one()
+    assert order.amount_yen == price and order.service_option == option
+    assert order.service_name == f"記者発表会の企画・当日の同席（{label}）"
+    assert gateway["created"][0]["amount"] == price and label in gateway["created"][0]["name"]
+
+
+@pytest.mark.parametrize("option", [None, "", "tokyo", "IWATE", "iwate ", "<script>", "other\n"])
+def test_press_conference_requires_a_valid_region(client, logged_in, gateway, option):
+    data = {} if option is None else {"option": option}
+    res = client.post("/services/interview_planning/order", data=data, follow_redirects=True)
+    assert "開催する地域を選んでください" in res.get_data(as_text=True)
+    assert Order.query.count() == 0 and gateway["created"] == []
+
+
+def test_region_is_ignored_for_services_without_options(client, logged_in, gateway):
+    client.post("/services/article_creation/order", data={"option": "other"})
+    order = Order.query.one()
+    assert order.amount_yen == 10000 and order.service_option is None and order.service_name == "自社媒体などに掲載する記事制作"
+
+
+def test_region_price_can_be_overridden_by_environment(client, logged_in, gateway, monkeypatch):
+    monkeypatch.setenv("PRICE_INTERVIEW_PLANNING_IWATE", "70000")
+    client.post("/services/interview_planning/order", data={"option": "iwate"})
+    assert Order.query.one().amount_yen == 70000
+    monkeypatch.setenv("PRICE_INTERVIEW_PLANNING_OTHER", "abc")
+    from app import create_app
+
+    with pytest.raises(RuntimeError, match="PRICE_INTERVIEW_PLANNING_OTHER"):
+        create_app("testing")
+

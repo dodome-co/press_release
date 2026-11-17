@@ -43,12 +43,22 @@ def _is_checkout_url(url) -> bool:
 
 
 # ---- 申込み ----
-def create_order(user: User, service_key: str, materials_url: str | None = None) -> Order:
-    """未払いの注文を作る（金額は、サービスの一覧から取る。画面の値は使わない）。"""
+def create_order(user: User, service_key: str, materials_url: str | None = None, option: str | None = None) -> Order:
+    """未払いの注文を作る（金額は、サービスの一覧から取る。画面の値は使わない）。
+
+    option は、地域などで料金が変わるサービスの選択肢（選択肢のないサービスでは、無視する）。
+    """
     service = get_service(service_key)
     if service is None:
         raise OrderError("サービスが見つかりません。")
-    if service.price_yen < MIN_PAYMENT_YEN:
+    if service.options:
+        chosen = service.get_option(option)
+        if chosen is None:
+            raise OrderError("開催する地域を選んでください。")
+        price, name, option_key = chosen.price_yen(service.key), f"{service.name}（{chosen.label}）", chosen.key
+    else:
+        price, name, option_key = service.price_yen, service.name, None
+    if price < MIN_PAYMENT_YEN:
         raise OrderError("このサービスは、いまはお申し込みできません。")
 
     materials = (materials_url or "").strip() if service.needs_materials_url else ""
@@ -78,8 +88,9 @@ def create_order(user: User, service_key: str, materials_url: str | None = None)
     order = Order(
         user_id=user.id,
         service_type=service.key,
-        service_name=service.name,
-        amount_yen=service.price_yen,
+        service_name=name,
+        service_option=option_key,
+        amount_yen=price,
         materials_url=materials or None,
     )
     db.session.add(order)
