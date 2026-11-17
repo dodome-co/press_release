@@ -7,6 +7,7 @@ from wtforms import PasswordField, StringField
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional, ValidationError
 
 from ..models import User
+from ..prefectures import prefecture_of
 
 
 def _digits(value: str) -> str:
@@ -62,6 +63,10 @@ class RegisterForm(FlaskForm):
     def validate_postal_code(self, field):
         if normalize_postal_code(field.data) is None:
             raise ValidationError("郵便番号は7桁の数字で入力してください（例：123-4567）。")
+
+    def validate_address(self, field):
+        if prefecture_of(field.data) is None:
+            raise ValidationError("住所は、都道府県から入力してください（例：岩手県盛岡市内丸10-1）。")
 
     def validate_phone(self, field):
         if normalize_phone(field.data) is None:

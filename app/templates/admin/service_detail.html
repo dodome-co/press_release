@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}自社サービスの紹介{% endblock %}
+{% block content %}
+<h1>自社サービスの紹介</h1>
+<p><a href="{{ url_for('admin_services.index') }}">一覧に戻る</a>　<a href="{{ url_for('admin_users.detail', user_id=user.id) }}">会員の詳細</a></p>
+<ul>
+  <li>会社：{{ user.company_name }}（{{ user.contact_name }}　{{ user.email }}）</li>
+  <li>更新日時（UTC）：{{ profile.updated_at|dt }}</li>
+</ul>
+<p style="white-space:pre-wrap">{{ profile.body }}</p>
+{% endblock %}

@@ -10,6 +10,10 @@
   <p>承認日時（UTC）：{{ release.approved_at.strftime('%Y-%m-%d %H:%M') }}　<a href="{{ url_for('admin.download', release_id=release.id) }}">Word をダウンロード</a></p>
 {% endif %}
 
+{% if release.user.service_profile %}
+<p><a href="{{ url_for('admin_services.detail', user_id=release.user_id) }}">この会社の「自社サービスの紹介」を見る</a>（要旨を書く参考に）</p>
+{% endif %}
+
 <h2>クライアントが入力した「要旨の元になる情報」</h2>
 <p>取材してほしい内容：<br><span style="white-space:pre-wrap">{{ release.source_what }}</span></p>
 <p>なぜ今これを行うのか：<br><span style="white-space:pre-wrap">{{ release.source_why }}</span></p>

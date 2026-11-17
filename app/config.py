@@ -35,6 +35,9 @@ class Config:
     # お問い合わせ先（メール・案内に載せる）。決まるまでは「準備中」と表示される
     SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "")
 
+    # 自社サービスの紹介（クライアントが入力する自由記述）の長さ
+    SERVICE_PROFILE_MAX_LENGTH = int(os.environ.get("SERVICE_PROFILE_MAX_LENGTH", "2000"))
+
     # 返金が「処理中」のまま残ったものを、Stripe に問い合わせて確定するまでの待ち時間（分）
     REFUND_PENDING_MINUTES = int(os.environ.get("REFUND_PENDING_MINUTES", "10"))
 

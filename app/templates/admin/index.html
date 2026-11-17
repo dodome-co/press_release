@@ -7,6 +7,7 @@
   <li><a href="{{ url_for('admin.releases') }}">書類の一覧（すべて）</a></li>
   <li><a href="{{ url_for('admin_orders.orders', status='paid') }}">注文（お支払い済み）</a></li>
   <li><a href="{{ url_for('admin_orders.orders') }}">注文の一覧（すべて）</a></li>
+  <li><a href="{{ url_for('admin_services.index') }}">自社サービスの紹介（クライアントの入力）</a></li>
   <li><a href="{{ url_for('admin_users.users') }}">会員の一覧（退会処理）</a></li>
 </ul>
 {% endblock %}

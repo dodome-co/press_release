@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}自社サービスの紹介{% endblock %}
+{% block content %}
+<h1>自社サービスの紹介（クライアントの入力）</h1>
+<form method="get"><input type="search" name="q" value="{{ q }}" placeholder="会社名・メール・本文"><button type="submit">検索</button></form>
+{% if profiles %}
+<table border="1">
+  <tr><th>会社</th><th>メール</th><th>書き出し</th><th>更新日時（UTC）</th></tr>
+  {% for p in profiles %}
+  <tr>
+    <td><a href="{{ url_for('admin_services.detail', user_id=p.user_id) }}">{{ p.user.company_name }}</a></td>
+    <td>{{ p.user.email }}</td>
+    <td>{{ p.body[:60] }}{% if p.body|length > 60 %}…{% endif %}</td>
+    <td>{{ p.updated_at|dt }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>該当する入力はありません。</p>
+{% endif %}
+<p><a href="{{ url_for('admin.index_page') }}">管理者ページに戻る</a></p>
+{% endblock %}

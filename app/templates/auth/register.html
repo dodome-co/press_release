@@ -11,7 +11,7 @@
   <h2>会社情報</h2>
   {{ field(form.company_name) }}
   {{ field(form.postal_code, placeholder="123-4567", autocomplete="postal-code") }}
-  {{ field(form.address, autocomplete="street-address") }}
+  {{ field(form.address, autocomplete="street-address", placeholder="都道府県から入力（例：岩手県盛岡市内丸10-1）") }}
   {{ field(form.contact_name) }}
   {{ field(form.phone, type="tel") }}
   {{ field(form.mobile_phone, type="tel") }}

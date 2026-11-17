@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% from "auth/_field.html" import field %}
+{% block title %}自社サービスの紹介{% endblock %}
+{% block content %}
+<h1>自社サービスの紹介</h1>
+<p>ここに書いた内容は、管理者が、プレスリリースの冒頭の文章（要旨）を書くときや、サービスのご相談の参考にします。何度でも書き直せます。</p>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  {{ field(form.body, rows=12, maxlength=limit) }}
+  <p>{{ limit }}文字まで。空にして保存すると、書いた内容が消えます。</p>
+  <button type="submit">保存する</button>
+</form>
+<p><a href="{{ url_for('mypage.index') }}">マイページに戻る</a></p>
+{% endblock %}
