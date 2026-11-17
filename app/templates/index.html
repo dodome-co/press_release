@@ -1,5 +1,40 @@
 {% extends "base.html" %}
+{% block title %}プレスリリースサポート{% endblock %}
 {% block content %}
-<h1>プレスリリースサポート</h1>
-<p>準備中です。</p>
+<section>
+  <h1>プレスリリースサポート</h1>
+  <p>東北のいいもの、新しいサービスを、記者に届けるお手伝いをします。<br>
+    元地方紙の記者が、御社のプレスリリースづくりと、記者クラブへの投げ込みを、サポートします。</p>
+  {% if current_user.is_authenticated %}
+    {% if current_user.is_admin %}
+      <p><a href="{{ url_for('admin.index_page') }}">管理者ページへ</a></p>
+    {% else %}
+      <p><a href="{{ url_for('releases.index') }}">プレスリリースを作る</a>　／　<a href="{{ url_for('mypage.index') }}">マイページ</a></p>
+    {% endif %}
+  {% else %}
+    <p><a href="{{ url_for('auth.register') }}">無料で会員登録</a>　／　<a href="{{ url_for('auth.login') }}">ログイン</a></p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>プレスリリースが届くまで</h2>
+  <ol>
+    <li>会員登録（無料）。会社の情報を登録します。</li>
+    <li>日時・場所・写真など、お知らせしたい内容を入力します。1件目は無料です。</li>
+    <li>元記者の管理者が、冒頭の文章（要旨）を仕上げて、内容を確認します。</li>
+    <li>承認されると、プレスリリース（Word）をダウンロードできます。</li>
+    <li>投げ込みのしかたを案内します。ご自身で難しいときは、投げ込みの交渉も代行します。</li>
+  </ol>
+</section>
+
+<section>
+  <h2>サービス</h2>
+  <ul>
+    <li>プレスリリースの作成：<strong>1件目は無料</strong>。2件目以降は、1件ずつ追加できます。</li>
+    {% for s in services if s.key != 'release_creation' %}
+    <li>{{ s.name }}</li>
+    {% endfor %}
+  </ul>
+  <p><a href="{{ url_for('orders.services') }}">サービスのご案内と料金を見る</a>　／　<a href="{{ url_for('main.about') }}">運営者について</a></p>
+</section>
 {% endblock %}

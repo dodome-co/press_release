@@ -19,12 +19,14 @@ def _own_order_or_404(order_id: int) -> Order:
 
 
 @bp.get("/services")
-@client_required
 def services():
+    """サービスのご案内。ログインしていなくても見られる。申し込めるのは、ログインしたクライアントだけ。"""
+    can_order = current_user.is_authenticated and not current_user.is_admin
     return render_template(
         "orders/services.html",
         services=all_services(),
-        can_create_release=release_service.can_create(current_user),
+        can_order=can_order,
+        can_create_release=can_order and release_service.can_create(current_user),
         refund_policy=REFUND_POLICY,
         notes=SERVICE_NOTES,
         support=support_contact(),
