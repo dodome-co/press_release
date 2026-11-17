@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}会員の一覧{% endblock %}
+{% block content %}
+<h1>会員の一覧</h1>
+<form method="get"><input type="search" name="q" value="{{ q }}" placeholder="メール・会社名・担当者名"><button type="submit">検索</button></form>
+{% if users %}
+<table border="1">
+  <tr><th>会社</th><th>担当者</th><th>メール</th><th>登録日時（UTC）</th></tr>
+  {% for u in users %}
+  <tr>
+    <td><a href="{{ url_for('admin_users.detail', user_id=u.id) }}">{{ u.company_name }}</a></td>
+    <td>{{ u.contact_name }}</td><td>{{ u.email }}</td><td>{{ u.created_at|dt }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>該当する会員はいません。</p>
+{% endif %}
+<p><a href="{{ url_for('admin.index_page') }}">管理者ページに戻る</a></p>
+{% endblock %}

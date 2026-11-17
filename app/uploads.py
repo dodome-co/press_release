@@ -6,6 +6,7 @@
 - 保存名はランダム。元のファイル名は表示用に別に持つだけで、保存先の名前には使わない。
 """
 import io
+import re
 import secrets
 import warnings
 from dataclasses import dataclass
@@ -50,7 +51,8 @@ def resolve_path(relative_path: str) -> Path:
 
 
 def _clean_original_name(name: str | None) -> str:
-    base = (name or "").replace("\\", "/").rsplit("/", 1)[-1].strip()
+    base = (name or "").replace("\\", "/").rsplit("/", 1)[-1]
+    base = re.sub(r"[\x00-\x1f\x7f]", "", base).strip()  # 改行などの制御文字は取り除く
     return (base or "image")[:255]
 
 
@@ -129,3 +131,82 @@ def delete_file(relative_path: str | None) -> None:
     except UploadError:
         return
     path.unlink(missing_ok=True)
+
+
+# ---- 文書ファイル（記事の納品）----
+DOCUMENT_TYPES = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "txt": "text/plain; charset=utf-8",
+}
+
+
+@dataclass
+class SavedDocument:
+    relative_path: str
+    original_filename: str
+    size_bytes: int
+
+
+def _check_document(raw: bytes, ext: str) -> None:
+    """拡張子ではなく、中身が、その形式かを確認する。"""
+    import zipfile
+
+    if ext == "pdf":
+        if not raw.startswith(b"%PDF-"):
+            raise UploadError("PDF として読み込めませんでした。")
+    elif ext == "docx":
+        if not zipfile.is_zipfile(io.BytesIO(raw)):
+            raise UploadError("Word（.docx）として読み込めませんでした。")
+        with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+            names = zf.namelist()
+            if "[Content_Types].xml" not in names or "word/document.xml" not in names:
+                raise UploadError("Word（.docx）として読み込めませんでした。")
+            # 圧縮爆弾（小さなファイルが、展開すると巨大になる）を避ける
+            if len(names) > 2000 or sum(i.file_size for i in zf.infolist()) > 200 * 1024 * 1024:
+                raise UploadError("ファイルが大きすぎます。")
+    elif ext == "txt":
+        if b"\x00" in raw:
+            raise UploadError("テキストファイルとして読み込めませんでした。")
+        try:
+            raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise UploadError("テキストファイルは UTF-8 で保存してください。")
+
+
+def save_document(file_storage, subdir: str) -> SavedDocument:
+    """記事の納品ファイル（PDF・Word・テキスト）を検証して保存する。保存名はランダム。"""
+    max_bytes = current_app.config["UPLOAD_MAX_DOCUMENT_BYTES"]
+    original = _clean_original_name(getattr(file_storage, "filename", None))
+    ext = original.rsplit(".", 1)[-1].lower() if "." in original else ""
+    if ext not in DOCUMENT_TYPES:
+        raise UploadError("PDF（.pdf）・Word（.docx）・テキスト（.txt）のファイルを選んでください。")
+    raw = file_storage.stream.read(max_bytes + 1)
+    if not raw:
+        raise UploadError("ファイルが選択されていません。")
+    if len(raw) > max_bytes:
+        raise UploadError(f"ファイルは{max_bytes // (1024 * 1024)}MB以内にしてください。")
+    _check_document(raw, ext)
+    relative = f"{subdir.strip('/')}/{secrets.token_hex(16)}.{ext}"
+    path = resolve_path(relative)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(raw)
+    return SavedDocument(relative_path=relative, original_filename=original, size_bytes=len(raw))
+
+
+def document_mimetype(relative_path: str) -> str | None:
+    ext = relative_path.rsplit(".", 1)[-1].lower()
+    return DOCUMENT_TYPES.get(ext)
+
+
+def delete_directory(relative_path: str) -> bool:
+    """フォルダを、中身ごと消す（なければ何もしない）。UPLOAD_DIR の外は、消さない。消せたら True。"""
+    import shutil
+
+    try:
+        path = resolve_path(relative_path)
+    except UploadError:
+        return False
+    if path.is_dir():
+        shutil.rmtree(path, ignore_errors=True)
+    return not path.exists()

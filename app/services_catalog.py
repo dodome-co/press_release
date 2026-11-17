@@ -94,7 +94,7 @@ def validate_price_overrides() -> None:
         raw = os.environ.get(name)
         if not raw:
             continue
-        if not raw.isdigit() or not MIN_PAYMENT_YEN <= int(raw) <= MAX_PAYMENT_YEN:
+        if not (raw.isascii() and raw.isdigit()) or not MIN_PAYMENT_YEN <= int(raw) <= MAX_PAYMENT_YEN:
             raise RuntimeError(
                 f"{name} は、{MIN_PAYMENT_YEN:,}〜{MAX_PAYMENT_YEN:,} の整数（円・カンマなし）で設定してください：{raw!r}"
             )

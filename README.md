@@ -41,7 +41,7 @@ uv run pytest                # テストを実行
 3. 別のターミナルで、通知をローカルに転送する：
    ```bash
    stripe listen \
-     --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.expired \
+     --events checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.expired,charge.refunded,charge.dispute.created,refund.updated,refund.failed \
      --forward-to localhost:5000/stripe/webhook
    ```
    表示される `whsec_...` を `.env` の `STRIPE_WEBHOOK_SECRET` に書き、`flask run` を再起動する（以前のアプリのものは使い回さない）。
@@ -51,5 +51,5 @@ uv run pytest                # テストを実行
 ### 決済まわりの注意
 - 開発では、本番用のキー（`sk_live_`）を `.env` に書くとアプリが起動しません（実際のお金が動かないように）。
 - 本番では、本番用のキーが必須です。テスト用のキーで試すときだけ、`ALLOW_TEST_STRIPE_KEY=1` を付けます。
-- **返金は、いまは Stripe の管理画面で直接行わないでください。** アプリは返金の通知を受け取っていないため、購入した書類の枠が減りません（管理者の返金機能は、次の段階で作ります）。
+- 返金は、管理者の注文詳細の画面から行います（基準は、画面に表示されます）。Stripe の管理画面で直接返金した場合も、`charge.refunded` の通知で、アプリの記録と購入した書類の枠に反映されます。そのため、`stripe listen` の `--events` には、`charge.refunded`、`charge.dispute.created`、`refund.updated`、`refund.failed` も含めてください。
 - 同じ注文に2回目の支払いが届いたとき（古い支払い画面から払われたとき）は、管理者にメールが届きます。Stripe の管理画面で確認して、必要なら返金してください。

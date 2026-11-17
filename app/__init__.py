@@ -46,7 +46,10 @@ def create_app(config_name: str | None = None) -> Flask:
     from .admin import bp as admin_bp
     from .auth import bp as auth_bp
     from .files import bp as files_bp
+    from .accounts import bp as admin_users_bp
+    from .admin_orders import bp as admin_orders_bp
     from .main import bp as main_bp
+    from .mypage import bp as mypage_bp
     from .orders import bp as orders_bp
     from .profile import bp as profile_bp
     from .releases import bp as releases_bp
@@ -58,8 +61,17 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(files_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(admin_orders_bp)
+    app.register_blueprint(admin_users_bp)
+    app.register_blueprint(mypage_bp)
 
     STATUS_LABELS = {"draft": "下書き", "pending": "承認待ち", "approved": "承認済み", "rejected": "差し戻し"}
+    ORDER_STATUS_LABELS = {"unpaid": "お支払い前", "paid": "お支払い済み", "canceled": "取り消し",
+                           "refunded": "返金済み", "partially_refunded": "一部返金"}
+    PROGRESS_LABELS = {"received": "受付", "in_progress": "着手", "delivered": "納品済み"}
+    app.jinja_env.filters["order_status_label"] = lambda v: ORDER_STATUS_LABELS.get(v, v or "")
+    app.jinja_env.filters["progress_label"] = lambda v: PROGRESS_LABELS.get(v, v or "—")
+    app.jinja_env.filters["dt"] = lambda v: v.strftime("%Y-%m-%d %H:%M") if v else ""
     app.jinja_env.filters["yen"] = lambda n: f"{n:,}円"
     app.jinja_env.filters["status_label"] = lambda status: STATUS_LABELS.get(status, status)
     return app

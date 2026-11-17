@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}注文履歴{% endblock %}
+{% block content %}
+<h1>注文履歴</h1>
+{% if orders %}
+<table border="1">
+  <tr><th>注文番号</th><th>サービス</th><th>金額</th><th>状態</th><th>進捗</th><th>納期</th><th>申込日</th></tr>
+  {% for o in orders %}
+  <tr>
+    <td><a href="{{ url_for('mypage.order_detail', order_id=o.id) }}">{{ o.id }}</a></td>
+    <td>{{ o.service_name }}</td>
+    <td>{{ o.amount_yen|yen }}</td>
+    <td>{{ o.status|order_status_label }}</td>
+    <td>{{ o.progress|progress_label }}</td>
+    <td>{{ o.due_date or '' }}</td>
+    <td>{{ o.created_at|dt }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>まだ注文がありません。</p>
+{% endif %}
+<p><a href="{{ url_for('mypage.index') }}">マイページに戻る</a></p>
+{% endblock %}
