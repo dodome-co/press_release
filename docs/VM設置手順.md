@@ -2,7 +2,7 @@
 
 Google Cloud の VM（Compute Engine）に、アプリを置いて、発表の相手が、自分の端末から触れるようにする手順。
 
-- **前提**：Ubuntu 24.04 LTS、データベースは VM の中の SQLite、HTTP（鍵マークなし）、IP アドレスで公開、Nginx の合言葉つき。
+- **前提**：Ubuntu 24.04 LTS、データベースは VM の中の SQLite（MySQL にするときは 5b）、HTTP（鍵マークなし）、IP アドレスで公開、Nginx の合言葉つき。
 - 別の OS や構成にするときは、読み替える（コマンドや、パッケージの名前が変わる）。
 - 設定ファイルの雛形は、リポジトリの `deploy/` にある。
 
@@ -84,6 +84,33 @@ sudo -u pressrel bash -c 'set -a; source /etc/press-release.env; set +a; .venv/b
 ```
 - `seed-demo` が、デモ用の管理者とクライアント3社を作り、ログインできるアカウントと、共通のパスワードを表示する。控えておく。
 - 自分専用の管理者を作るなら、`flask create-admin`（同じように環境変数を読み込んで実行）。
+
+## 5b. MySQL を使うとき（VM の中の MySQL）
+既定は SQLite。MySQL にするときは、手順5の前に、この手順をする（`DATABASE_URL` を、MySQL のものにしてから、手順5を実行する）。Cloud SQL を使うときは、手順の「インストール」を飛ばして、接続先のホスト名を、Cloud SQL のものにする。
+```bash
+sudo apt -y install mysql-server
+sudo systemctl enable --now mysql
+
+# データベースと、アプリ専用のユーザー（パスワードは、長いランダムな文字列にして、控える）
+sudo mysql <<'SQL'
+CREATE DATABASE press_release CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE USER 'press_release'@'localhost' IDENTIFIED BY 'ここにパスワード';
+GRANT ALL PRIVILEGES ON press_release.* TO 'press_release'@'localhost';
+SQL
+```
+- `/etc/press-release.env` の `DATABASE_URL` を、`mysql+pymysql://press_release:ここにパスワード@127.0.0.1:3306/press_release?charset=utf8mb4` にする（パスワードに記号があるときは、URL の形式に直す。英数字だけにするのが簡単）。
+- MySQL は、VM の外からは、つながらない（`127.0.0.1` だけで待ち受ける。ファイアウォールで、3306 番は開けない）。
+- バックアップは、`backup.sh` が、`DATABASE_URL` を見て、自動で `mysqldump` に切り替わる（`mysqldump` は、`mysql-server` と一緒に入る）。
+- 確認：`sudo -u pressrel bash -c 'set -a; source /etc/press-release.env; set +a; .venv/bin/flask db upgrade'` が、エラーなく終わり、`sudo mysql press_release -e 'SHOW TABLES;'` に、表が出る。
+
+## 5c. 手元（開発のパソコン）で、MySQL で全テストを通す
+```bash
+sudo apt -y install mysql-server && sudo systemctl start mysql
+sudo mysql -e "CREATE DATABASE press_release_test CHARACTER SET utf8mb4; CREATE USER 'press_release'@'localhost' IDENTIFIED BY 'テスト用のパスワード'; GRANT ALL ON press_release_test.* TO 'press_release'@'localhost';"
+TEST_DATABASE_URL='mysql+pymysql://press_release:テスト用のパスワード@127.0.0.1:3306/press_release_test?charset=utf8mb4' uv run pytest
+```
+- テストは、テストごとに全テーブルを作って消す。**本物のデータが入ったデータベースは、指定しない。**
+- マイグレーションの確認は、空のデータベースに、`DATABASE_URL` を向けて、`uv run flask db upgrade` を実行する。
 
 ## 6. アプリの自動起動（systemd）
 ```bash
