@@ -5,5 +5,7 @@ __pycache__/
 instance/
 uploads/
 *.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 *.db
 .pytest_cache/

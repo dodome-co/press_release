@@ -12,6 +12,30 @@ from .config import CONFIGS  # noqa: E402
 from .extensions import csrf, db, login_manager, migrate  # noqa: E402
 
 
+def _tune_sqlite(app: Flask) -> None:
+    """ファイルの SQLite を、複数のプロセス（gunicorn）から使っても、止まりにくくする。
+
+    - WAL：書き込み中も、読み取りが待たされない（書き込みは、1つずつ）
+    - busy_timeout：ほかが書き込み中なら、15秒まで待つ（すぐに「ロック中」のエラーにしない）
+    メモリ上のデータベース（テスト）には、使わない。
+    """
+    uri = app.config["SQLALCHEMY_DATABASE_URI"]
+    if not uri.startswith("sqlite") or ":memory:" in uri:
+        return
+    from sqlalchemy import event
+
+    with app.app_context():
+        engine = db.engine
+
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragmas(dbapi_connection, _record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=15000")
+        cursor.close()
+
+
 def create_app(config_name: str | None = None) -> Flask:
     config_name = config_name or os.environ.get("APP_ENV", "production")
     if config_name not in CONFIGS:
@@ -32,6 +56,7 @@ def create_app(config_name: str | None = None) -> Flask:
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
     db.init_app(app)
+    _tune_sqlite(app)
     migrate.init_app(app, db, render_as_batch=True)  # SQLite でも変更を反映できるように
     csrf.init_app(app)
     login_manager.init_app(app)
