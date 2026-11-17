@@ -1,22 +1,24 @@
-/* プレスリリースサポート：画面の見た目。落ち着いた青を基調にする。
+/* プレスリリースサポート：画面の見た目。ロゴ（ゆきわり。）の、オリーブグリーンとクリーム色を基調にする。
    色は、ここ（:root）で決める。変えるときは、この部分だけを直す。 */
 :root {
-  --primary: #1f4e79;        /* 落ち着いた青（ヘッダー・ボタン・見出し） */
-  --primary-dark: #163a5a;   /* ボタンを押したとき・リンクの上にカーソルを置いたとき */
-  --primary-soft: #eaf1f8;   /* 薄い青（背景・表の見出し） */
-  --primary-line: #c6d6e6;   /* 薄い青の線 */
-  --text: #1f2933;
-  --muted: #5b6b7a;
-  --bg: #f6f8fb;
+  --primary: #566900;        /* ロゴの文字の、オリーブグリーン（見出し・ボタン・リンク） */
+  --primary-dark: #404e00;   /* ボタンを押したとき・リンクの上にカーソルを置いたとき */
+  --primary-soft: #f1f5e1;   /* 薄い緑（表の見出し・背景） */
+  --primary-line: #d2dcae;   /* 薄い緑の線 */
+  --brand-edge: #607401;     /* ロゴの枠の緑（ヘッダーの下線） */
+  --peach: #fee9cf;          /* ロゴのキャラクターの肌の色（ワンポイント） */
+  --text: #2f2a22;           /* あたたかい濃い茶色 */
+  --muted: #6b6355;
+  --bg: #fdfbf4;             /* ロゴの中の、クリーム色 */
   --white: #ffffff;
   --error: #a4262c;
   --error-bg: #fdecea;
-  --success: #1e6b3a;
+  --success: #1f6a3a;
   --success-bg: #e6f4ea;
   --warn-bg: #fff4d6;
   --warn-line: #e3c56b;
-  --radius: 6px;
-  --shadow: 0 1px 3px rgba(31, 78, 121, 0.12);
+  --radius: 8px;
+  --shadow: 0 1px 3px rgba(86, 105, 0, 0.14);
 }
 
 * { box-sizing: border-box; }
@@ -34,7 +36,7 @@ body {
 
 a { color: var(--primary); text-underline-offset: 3px; }
 a:hover { color: var(--primary-dark); }
-:focus-visible { outline: 3px solid #7ba7d1; outline-offset: 2px; }
+:focus-visible { outline: 3px solid #b8c96a; outline-offset: 2px; }
 
 /* ---- デモの表示 ---- */
 .demo-banner {
@@ -47,14 +49,15 @@ a:hover { color: var(--primary-dark); }
 
 /* ---- ヘッダー ---- */
 .site-header {
-  background: var(--primary);
-  color: var(--white);
+  background: var(--white);
+  color: var(--text);
+  border-bottom: 4px solid var(--brand-edge);
   box-shadow: var(--shadow);
 }
 .site-header-inner {
   max-width: 1040px;
   margin: 0 auto;
-  padding: 10px 20px;
+  padding: 8px 20px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -64,15 +67,15 @@ a:hover { color: var(--primary-dark); }
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  color: var(--white);
-  font-size: 1.25rem;
+  gap: 12px;
+  color: var(--primary);
+  font-size: 0.95rem;
   font-weight: 700;
   text-decoration: none;
   letter-spacing: 0.04em;
 }
-.brand:hover { color: var(--white); opacity: 0.9; }
-.brand img { height: 40px; width: auto; display: block; }
+.brand:hover { color: var(--primary-dark); }
+.brand img { height: 68px; width: auto; display: block; }
 
 .site-nav {
   display: flex;
@@ -82,21 +85,22 @@ a:hover { color: var(--primary-dark); }
 }
 .site-nav a,
 .site-nav button {
-  color: var(--white);
+  color: var(--primary);
   background: transparent;
   border: 0;
   padding: 6px 12px;
   border-radius: var(--radius);
   font: inherit;
   font-size: 0.9375rem;
+  font-weight: 600;
   text-decoration: none;
   cursor: pointer;
 }
 .site-nav a:hover,
-.site-nav button:hover { background: rgba(255, 255, 255, 0.16); color: var(--white); }
+.site-nav button:hover { background: var(--primary-soft); color: var(--primary-dark); }
 .site-nav form { display: inline; margin: 0; }
-.site-nav .nav-signup { background: var(--white); color: var(--primary); font-weight: 700; }
-.site-nav .nav-signup:hover { background: var(--primary-soft); color: var(--primary-dark); }
+.site-nav .nav-signup { background: var(--primary); color: var(--white); }
+.site-nav .nav-signup:hover { background: var(--primary-dark); color: var(--white); }
 
 /* ---- 本文 ---- */
 main {
@@ -166,13 +170,26 @@ main > form { padding: 20px 24px; margin-bottom: 20px; }
 
 /* トップページの、最初の大きな紹介 */
 section.hero {
-  background: linear-gradient(135deg, var(--primary-soft) 0%, #f6faff 100%);
+  background: linear-gradient(160deg, var(--peach) 0%, #fff8ec 45%, var(--white) 100%);
   border-color: var(--primary-line);
-  padding: 36px 32px 24px;
+  padding: 32px 32px 24px;
   text-align: center;
 }
-section.hero h1 { border: 0; font-size: 2.1rem; margin-bottom: 12px; padding-bottom: 0; }
-section.hero p { font-size: 1.05rem; }
+section.hero .hero-logo { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto 18px; }
+section.hero h1 { border: 0; font-size: 1.5rem; margin-bottom: 10px; padding-bottom: 0; }
+section.hero .tagline {
+  margin: 0 auto 18px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.7;
+  color: var(--primary);
+}
+section.hero .tagline span { display: block; }
+section.hero p { font-size: 1.02rem; }
+section.hero .hero-actions { margin: 8px 0 12px; }
+section.hero .hero-actions .button { margin: 4px 6px; }
+.button.secondary { background: var(--white); color: var(--primary); }
+.button.secondary:hover { background: var(--primary-soft); color: var(--primary-dark); }
 
 /* ---- 表 ---- */
 table {
@@ -189,7 +206,7 @@ th, td {
   vertical-align: top;
 }
 th { background: var(--primary-soft); color: var(--primary); font-weight: 700; white-space: nowrap; }
-tr:nth-child(even) td { background: #fafcfe; }
+tr:nth-child(even) td { background: #fbfcf4; }
 main > table { overflow: hidden; }
 
 /* ---- フォーム ---- */
@@ -200,7 +217,7 @@ input[type="search"], input[type="number"], input[type="date"], select, textarea
   max-width: 34rem;
   padding: 9px 12px;
   margin-top: 4px;
-  border: 1px solid #9fb4c9;
+  border: 1px solid #b3b99a;
   border-radius: var(--radius);
   background: var(--white);
   color: var(--text);
@@ -210,7 +227,7 @@ input[type="search"], input[type="number"], input[type="date"], select, textarea
 input[type="number"] { max-width: 10rem; }
 input[type="date"] { max-width: 14rem; }
 textarea { max-width: 44rem; resize: vertical; }
-input:focus, select:focus, textarea:focus { border-color: var(--primary); outline: 3px solid #bcd3ea; outline-offset: 0; }
+input:focus, select:focus, textarea:focus { border-color: var(--primary); outline: 3px solid #d6e0a8; outline-offset: 0; }
 input[type="radio"], input[type="checkbox"] { margin-right: 6px; }
 input[type="file"] { margin: 4px 0 8px; max-width: 100%; }
 input[size] { width: auto; max-width: 100%; }
@@ -238,7 +255,7 @@ hr { border: 0; border-top: 1px solid var(--primary-line); margin: 24px 0; }
   main { padding: 20px 14px 40px; }
   main > section, main > form { padding: 16px 16px 6px; }
   h1 { font-size: 1.4rem; }
-  section.hero h1 { font-size: 1.6rem; }
+  section.hero .tagline { font-size: 1.15rem; }
   .site-header-inner { padding: 8px 14px; }
   table { display: block; overflow-x: auto; }
 }

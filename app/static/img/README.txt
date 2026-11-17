@@ -1,2 +1,4 @@
-ロゴを追加するには、このフォルダに、logo.png（または logo.svg / logo.webp / logo.jpg）を置いてください。
-置くと、すべての画面のヘッダー（サイト名の左）に、自動で表示されます。高さ 40px ほどに縮小して表示されます。
+ロゴ（ゆきわり。）：logo.webp
+- 元の画像は、design/yukiwari-logo-original.jpg に、保管している。
+- 置き換えるときは、このフォルダに、logo.png（または logo.svg / logo.webp / logo.jpg）を置く。
+  すべての画面のヘッダー（高さ68px）と、トップページ（大きく）に、自動で表示される。
