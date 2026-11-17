@@ -6,7 +6,7 @@ from ..auth.decorators import client_required
 from ..extensions import csrf, db
 from ..models import ORDER_UNPAID, Order
 from ..releases import service as release_service
-from ..services_catalog import all_services, get_service, refund_policy_text, support_contact
+from ..services_catalog import REFUND_POLICY, all_services, get_service, support_contact
 from . import bp, service
 
 
@@ -25,7 +25,7 @@ def services():
         "orders/services.html",
         services=all_services(),
         can_create_release=release_service.can_create(current_user),
-        refund_policy=refund_policy_text(),
+        refund_policy=REFUND_POLICY,
         support=support_contact(),
     )
 

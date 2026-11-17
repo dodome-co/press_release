@@ -2,6 +2,7 @@
 {% block title %}サービスのご案内{% endblock %}
 {% block content %}
 <h1>サービスのご案内</h1>
+<p>いずれも管理者との事前面談が必要となります。</p>
 <p>料金は税込です。</p>
 {% for s in services %}
 <section>
@@ -26,6 +27,12 @@
 </section>
 {% endfor %}
 <h2>キャンセル・返金について</h2>
-<p>{{ refund_policy }}</p>
+<ul>
+  {% for heading, items in refund_policy %}
+  <li>{{ heading }}
+    {% if items %}<ul>{% for item in items %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
 <p>お問い合わせ先：{{ support }}</p>
 {% endblock %}

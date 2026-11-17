@@ -294,3 +294,55 @@ def test_start_checkout_refuses_paid_order(app, client_user, gateway):
     with pytest.raises(order_service.OrderError):
         order_service.start_checkout(order)
     assert gateway["created"] == []
+
+
+# ---- 本物の Stripe のオブジェクトを通す（模擬が、本物の形と違っていた不具合の再発防止） ----
+def _real_session(order_id=1):
+    import stripe
+
+    return stripe.checkout.Session.construct_from(
+        {"id": "cs_test_real", "object": "checkout.session", "url": "https://checkout.stripe.com/c/pay/cs_test_real",
+         "payment_status": "unpaid", "metadata": {"order_id": str(order_id)}}, "sk_test_x")
+
+
+def test_real_stripe_session_object_works_end_to_end(app, client, logged_in, monkeypatch):
+    """gateway を差し替えず、Stripe のライブラリ（のネットワーク呼び出しだけ）を差し替える。"""
+    import stripe
+
+    app.config["STRIPE_SECRET_KEY"] = "sk_test_x"
+    captured = {}
+
+    def fake_create(**kwargs):
+        captured.update(kwargs)
+        return _real_session()
+
+    monkeypatch.setattr(stripe.checkout.Session, "create", fake_create)
+    monkeypatch.setattr(payments, "expire_checkout_session", lambda sid: None)
+    res = client.post("/services/interview_planning/order")
+    assert res.status_code == 303 and res.headers["Location"] == "https://checkout.stripe.com/c/pay/cs_test_real"
+    assert Order.query.one().stripe_session_id == "cs_test_real"
+    assert captured["line_items"][0]["price_data"]["unit_amount"] == 60000
+    assert captured["line_items"][0]["price_data"]["currency"] == "jpy"
+    assert captured["idempotency_key"] == "checkout-order-1-1"
+    assert captured["metadata"] == {"order_id": "1"}
+
+
+def test_gateway_returns_plain_dict(app, monkeypatch):
+    import stripe
+
+    app.config["STRIPE_SECRET_KEY"] = "sk_test_x"
+    monkeypatch.setattr(stripe.checkout.Session, "create", lambda **kw: _real_session())
+    order = Order(id=1, user_id=None, service_type="x", service_name="x", amount_yen=100)
+    result = payments.create_checkout_session(order, "a@example.com", "https://e/ok", "https://e/ng", 1)
+    assert type(result) is dict and set(result) == {"id", "url"}
+
+
+def test_stripe_api_error_becomes_message(app, client, logged_in, monkeypatch):
+    import stripe
+
+    app.config["STRIPE_SECRET_KEY"] = "sk_test_x"  # キーがあって、Stripe 側がエラーを返す場合
+    monkeypatch.setattr(stripe.checkout.Session, "create",
+                        lambda **kw: (_ for _ in ()).throw(stripe.AuthenticationError("bad key")))
+    res = client.post("/services/interview_planning/order", follow_redirects=True)
+    assert res.status_code == 200 and "決済を開始できませんでした" in res.get_data(as_text=True)
+    assert Order.query.one().status == "unpaid"

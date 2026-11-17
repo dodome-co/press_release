@@ -22,7 +22,7 @@ def create_checkout_session(order, customer_email: str, success_url: str, cancel
     # Stripe の Checkout は、有効時間を30分〜24時間にしか設定できない
     minutes = max(30, min(24 * 60, current_app.config["CHECKOUT_EXPIRES_MINUTES"]))
     try:
-        return stripe.checkout.Session.create(
+        session = stripe.checkout.Session.create(
             mode="payment",
             line_items=[
                 {
@@ -42,6 +42,8 @@ def create_checkout_session(order, customer_email: str, success_url: str, cancel
             expires_at=int(time.time()) + minutes * 60,
             idempotency_key=f"checkout-order-{order.id}-{attempt}",
         )
+        # Stripe のオブジェクトは dict の .get() が使えないので、必要な値だけの普通の dict にして返す
+        return {"id": session["id"], "url": session["url"]}
     except stripe.StripeError as e:
         current_app.logger.error("Checkout セッションを作れませんでした（注文ID=%s）：%s", order.id, type(e).__name__)
         raise PaymentError("決済を開始できませんでした") from e
