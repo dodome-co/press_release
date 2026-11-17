@@ -4,17 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}プレスリリースサポート{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
   {% if config.DEMO_MODE %}
-  <div class="demo-banner" style="background:#fff3cd;border-bottom:1px solid #e0c36a;padding:6px 12px;font-size:14px">
+  <div class="demo-banner">
     ビジネスプランの発表用のデモです。決済はテストモードで、実際の請求はありません。個人情報は入力しないでください。
     （テスト用のカード番号：4242 4242 4242 4242）
   </div>
   {% endif %}
-  <header>
-    <a href="{{ url_for('main.index') }}">プレスリリースサポート</a>
-    <nav>
+  <header class="site-header">
+   <div class="site-header-inner">
+    <a class="brand" href="{{ url_for('main.index') }}">
+      {% if logo_url %}<img src="{{ logo_url }}" alt="">{% endif %}
+      <span>プレスリリースサポート</span>
+    </a>
+    <nav class="site-nav">
       {% if current_user.is_authenticated and not current_user.is_admin %}
         <a href="{{ url_for('releases.index') }}">プレスリリース</a>
       {% endif %}
@@ -33,13 +38,14 @@
         </form>
       {% else %}
         <a href="{{ url_for('auth.login') }}">ログイン</a>
-        <a href="{{ url_for('auth.register') }}">会員登録</a>
+        <a class="nav-signup" href="{{ url_for('auth.register') }}">会員登録</a>
       {% endif %}
     </nav>
+   </div>
   </header>
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-      <ul>
+      <ul class="flash">
         {% for category, message in messages %}<li class="{{ category }}">{{ message }}</li>{% endfor %}
       </ul>
     {% endif %}

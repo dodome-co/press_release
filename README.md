@@ -77,3 +77,7 @@ COMPANY_ADDRESS=岩手県盛岡市…
 SUPPORT_EMAIL=…@example.com
 ```
 未設定のときは、所在地とメールアドレスは「（準備中）」と表示される。
+
+## 見た目（デザイン）の変え方
+- 色は、`app/static/css/style.css` の先頭（`:root`）で決めている。色を変えるときは、そこだけを直す。
+- ロゴは、`app/static/img/` に `logo.png`（または `logo.svg` / `logo.webp` / `logo.jpg`）を置くと、ヘッダーに自動で出る（高さ40pxほどに縮小される）。
