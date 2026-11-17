@@ -67,3 +67,13 @@ uv run pytest                # テストを実行
   ```
   どちらも、デモ環境（`DEMO_MODE=1` か `APP_ENV=demo`）でだけ動く。ログインできるアカウントと共通のパスワードは、実行したときに表示される（パスワードは、環境変数 `DEMO_PASSWORD` で変えられる）。
 - 手元で試すときは、`.env` に `DEMO_MODE=1` を書いて、`flask db upgrade` のあと、`flask seed-demo` を実行する。
+
+### 運営者の情報（About Us）
+会社名・所在地・メールアドレスは、コードや Git には書かず、環境変数で設定する（`.env` や、VM の設定ファイル）。
+
+```
+OPERATOR_NAME=VERBINDEN（仮）
+COMPANY_ADDRESS=岩手県盛岡市…
+SUPPORT_EMAIL=…@example.com
+```
+未設定のときは、所在地とメールアドレスは「（準備中）」と表示される。

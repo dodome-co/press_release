@@ -71,10 +71,14 @@ def _mails(app):
 
 
 # ---- サービス案内 ----
-def test_services_require_login_and_client_role(client, admin_user):
-    assert client.get("/services").status_code == 302
+def test_services_page_is_public_but_ordering_needs_a_client_login(client, admin_user, app):
+    # ログインしていなくても、サービスの一覧は見られる（申し込みは、ログインしたクライアントだけ）
+    res = client.get("/services")
+    assert res.status_code == 200 and "サービスのご案内" in res.get_data(as_text=True)
+    assert client.post("/services/distribution_proxy/order").status_code == 302  # 申込みは、ログインへ
     login(client, "admin@example.com")
-    assert client.get("/services").status_code == 403
+    assert client.get("/services").status_code == 200  # 管理者は、見るだけ
+    assert client.post("/services/distribution_proxy/order").status_code == 403
 
 
 def test_services_page_lists_all_with_prices_and_policy(client, logged_in):
