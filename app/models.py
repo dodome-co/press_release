@@ -52,6 +52,10 @@ class User(UserMixin, db.Model):
         foreign_keys="Release.user_id",
         cascade="all, delete-orphan",
     )
+    # 自社サービスの紹介（1人に1つ）。退会のときは、一緒に消える
+    service_profile = db.relationship(
+        "ServiceProfile", back_populates="user", uselist=False, cascade="all, delete-orphan"
+    )
     # 注文は、ユーザーを削除しても残す（user_id が空になる）。ORM でも、消さずに切り離す
     orders = db.relationship("Order", back_populates="user", passive_deletes=False)
 
@@ -380,3 +384,24 @@ class StripeEvent(db.Model):
     event_id = db.Column(db.String(255), nullable=False, unique=True)
     event_type = db.Column(db.String(100), nullable=False)
     received_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+
+INPUT_METHOD_TEXT = "text"
+INPUT_METHOD_VOICE = "voice"  # 第2弾
+
+
+class ServiceProfile(db.Model):
+    """クライアントが入力する、自社のサービスの紹介（仕様書 F10）。管理者が、要旨を書くときなどの参考にする。"""
+
+    __tablename__ = "service_profiles"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(
+        db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    input_method = db.Column(db.String(10), nullable=False, default=INPUT_METHOD_TEXT)
+    body = db.Column(db.Text, nullable=False, default="")
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
+
+    user = db.relationship("User", back_populates="service_profile")

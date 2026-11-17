@@ -182,7 +182,7 @@ def test_order_with_multiline_materials_url_is_refused(client, logged_in, gatewa
 
 def test_profile_website_url_is_strict_too(client, client_user):
     login(client, "client@example.com")
-    data = {"company_name": "社", "postal_code": "100-0001", "address": "住所", "contact_name": "担当",
+    data = {"company_name": "社", "postal_code": "100-0001", "address": "東京都千代田区1-1", "contact_name": "担当",
             "phone": "03-0000-0000"}
     for bad in ("https://a.example/x\nb", "https://user:pw@a.example", "https://"):
         res = client.post("/mypage/profile", data={**data, "website_url": bad})

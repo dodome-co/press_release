@@ -46,8 +46,10 @@ def create_app(config_name: str | None = None) -> Flask:
     from .admin import bp as admin_bp
     from .auth import bp as auth_bp
     from .files import bp as files_bp
+    from .guide import bp as guide_bp
     from .accounts import bp as admin_users_bp
     from .admin_orders import bp as admin_orders_bp
+    from .admin_services import bp as admin_services_bp
     from .main import bp as main_bp
     from .mypage import bp as mypage_bp
     from .orders import bp as orders_bp
@@ -59,9 +61,11 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(releases_bp)
     app.register_blueprint(profile_bp)
     app.register_blueprint(files_bp)
+    app.register_blueprint(guide_bp)
     app.register_blueprint(orders_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(admin_orders_bp)
+    app.register_blueprint(admin_services_bp)
     app.register_blueprint(admin_users_bp)
     app.register_blueprint(mypage_bp)
 

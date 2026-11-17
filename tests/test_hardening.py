@@ -184,11 +184,11 @@ def test_control_characters_do_not_break_word_ampersands(app, client_user):
 
 def test_control_characters_removed_from_profile_and_register(client, client_user):
     login(client, "client@example.com")
-    data = {"company_name": "社\x01名", "postal_code": "100-0001", "address": "住\x02所", "contact_name": "担\x03当",
+    data = {"company_name": "社\x01名", "postal_code": "100-0001", "address": "東京都\x02千代田区", "contact_name": "担\x03当",
             "phone": "03-0000-0000"}
     client.post("/mypage/profile", data=data)
     u = db.session.get(User, client_user.id)
-    assert (u.company_name, u.address, u.contact_name) == ("社名", "住所", "担当")
+    assert (u.company_name, u.address, u.contact_name) == ("社名", "東京都千代田区", "担当")
 
 
 def test_admin_edit_removes_control_characters(app, client_user, admin_user):

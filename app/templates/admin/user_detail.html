@@ -11,6 +11,12 @@
   <li>住所：〒{{ user.postal_code }} {{ user.address }}</li>
   <li>書類：{{ release_count }}件</li>
 </ul>
+<h2>自社サービスの紹介</h2>
+{% if user.service_profile %}
+<p style="white-space:pre-wrap">{{ user.service_profile.body }}</p>
+<p>更新：{{ user.service_profile.updated_at|dt }}（UTC）</p>
+{% else %}<p>まだ入力されていません。</p>{% endif %}
+
 <h2>注文</h2>
 {% if orders %}
 <ul>

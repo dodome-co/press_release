@@ -7,6 +7,7 @@
 
 {% if release.status == 'approved' %}
   <p><a href="{{ url_for('releases.download', release_id=release.id) }}">Word をダウンロードする</a></p>
+  <p>次は、記者クラブへの<a href="{{ url_for('guide.index') }}">投げ込みのしかた</a>をご覧ください。</p>
   {% if admin_changes %}
   <h3>管理者が修正した内容</h3>
   <ul>

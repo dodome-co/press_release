@@ -1,5 +1,5 @@
 """会員情報（企業情報・ロゴ）の確認と変更。Word の会社概要とお問い合わせ先に使われる。"""
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField
@@ -8,7 +8,9 @@ from wtforms.validators import DataRequired, Length, Optional, ValidationError
 from . import uploads
 from .auth.decorators import client_required
 from .auth.forms import normalize_phone, normalize_postal_code
+from .prefectures import prefecture_of
 from .extensions import db
+from .models import INPUT_METHOD_TEXT, ServiceProfile
 from .textutil import clean_text, is_safe_http_url
 
 bp = Blueprint("profile", __name__, url_prefix="/mypage")
@@ -31,6 +33,10 @@ class ProfileForm(FlaskForm):
     def validate_postal_code(self, field):
         if normalize_postal_code(field.data) is None:
             raise ValidationError("郵便番号は7桁の数字で入力してください（例：123-4567）。")
+
+    def validate_address(self, field):
+        if prefecture_of(field.data) is None:
+            raise ValidationError("住所は、都道府県から入力してください（例：岩手県盛岡市内丸10-1）。")
 
     def validate_phone(self, field):
         if normalize_phone(field.data) is None:
@@ -110,3 +116,35 @@ def delete_logo():
     uploads.delete_file(old)
     flash("ロゴを削除しました。", "success")
     return redirect(url_for("profile.edit"))
+
+
+class ServiceProfileForm(FlaskForm):
+    body = TextAreaField("自社のサービスや商品について、自由に書いてください")
+
+    def validate_body(self, field):
+        limit = current_app.config["SERVICE_PROFILE_MAX_LENGTH"]
+        if len(clean_text(field.data)) > limit:
+            raise ValidationError(f"{limit}文字以内で入力してください。")
+
+
+@bp.route("/service", methods=["GET", "POST"])
+@client_required
+def service_profile():
+    """自社サービスの紹介（F10）。管理者が、書類の要旨を書くときなどの参考にする。何度でも書き直せる。"""
+    profile = current_user.service_profile
+    form = ServiceProfileForm(data={"body": profile.body if profile else ""})
+    if form.validate_on_submit():
+        body = clean_text(form.body.data)
+        if not body:
+            if profile is not None:
+                db.session.delete(profile)  # 空にして保存すると、入力を消す
+        elif profile is None:
+            db.session.add(ServiceProfile(user_id=current_user.id, input_method=INPUT_METHOD_TEXT, body=body))
+        else:
+            profile.body = body
+        db.session.commit()
+        flash("自社サービスの紹介を保存しました。" if body else "自社サービスの紹介を消しました。", "success")
+        return redirect(url_for("profile.service_profile"))
+    return render_template(
+        "mypage/service_profile.html", form=form, limit=current_app.config["SERVICE_PROFILE_MAX_LENGTH"]
+    )
