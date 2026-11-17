@@ -37,10 +37,12 @@ def create_app(config_name: str | None = None) -> Flask:
     login_manager.init_app(app)
 
     from . import models  # noqa: F401  マイグレーションがモデルを見つけられるように読み込む
-    from .cli import create_admin
+    from .cli import create_admin, reset_demo, seed_demo
     from .security import register_security_headers
 
     app.cli.add_command(create_admin)
+    app.cli.add_command(seed_demo)
+    app.cli.add_command(reset_demo)
     register_security_headers(app)
 
     from .admin import bp as admin_bp
@@ -48,6 +50,7 @@ def create_app(config_name: str | None = None) -> Flask:
     from .files import bp as files_bp
     from .guide import bp as guide_bp
     from .accounts import bp as admin_users_bp
+    from .admin_mails import bp as admin_mails_bp
     from .admin_orders import bp as admin_orders_bp
     from .admin_services import bp as admin_services_bp
     from .main import bp as main_bp
@@ -65,6 +68,7 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(orders_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(admin_orders_bp)
+    app.register_blueprint(admin_mails_bp)
     app.register_blueprint(admin_services_bp)
     app.register_blueprint(admin_users_bp)
     app.register_blueprint(mypage_bp)

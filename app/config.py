@@ -68,8 +68,12 @@ class Config:
     # Nginx など、リバースプロキシの後ろで動かすとき 1 にする（実際の IP と http/https を読む）
     PROXY_FIX = os.environ.get("PROXY_FIX", "0") == "1"
 
-    # メール送信方法。console=送らずログに出す（開発・テスト専用）。本番用は未実装（仕様書 9章）
+    # メール送信方法。console=送らずログに出す（開発・テスト専用）、database=送らずデータベースに記録して、
+    # 管理者の画面で見られるようにする（デモ専用）。本番用は未実装（仕様書 9章）
     MAIL_BACKEND = os.environ.get("MAIL_BACKEND", "console")
+
+    # ビジネスプラン発表用のデモ環境か（全画面に、デモであることの表示を出す）
+    DEMO_MODE = os.environ.get("DEMO_MODE", "0") == "1"
 
     # 仕様書「設定値」：コードに書き込まず設定で変えられるようにする
     FREE_RELEASE_LIMIT = int(os.environ.get("FREE_RELEASE_LIMIT", "1"))
@@ -113,10 +117,45 @@ class ProductionConfig(Config):
             )
         if not cls.STRIPE_WEBHOOK_SECRET:
             problems.append("STRIPE_WEBHOOK_SECRET を設定してください")
-        if cls.MAIL_BACKEND == "console":
-            problems.append("本番用の MAIL_BACKEND を設定してください（console は開発専用）")
+        if cls.MAIL_BACKEND in ("console", "database"):
+            problems.append("本番用の MAIL_BACKEND を設定してください（console と database は、開発・デモ専用）")
         if problems:
             raise RuntimeError("本番の設定が足りません：" + " / ".join(problems))
+
+
+class DemoConfig(Config):
+    """ビジネスプラン発表用のデモ環境（VM に置いて、他の人にも触ってもらう）。
+
+    本番と同じ安全な設定（デバッグなし、ホストの固定、リンクの土台 URL）にしたうえで、
+    実際のお金とメールが動かないことを、起動時に確認する：
+    - Stripe は、テスト用のキー（sk_test_）だけを許可する（本番用のキーなら、起動しない）
+    - メールは送らず、データベースに記録して、管理者の画面で見せる
+    HTTP（鍵マークなし）で公開することを想定するため、Cookie の Secure は付けない。
+    """
+
+    DEBUG = False
+    DEMO_MODE = True
+    SESSION_COOKIE_SECURE = False
+    PROXY_FIX = os.environ.get("PROXY_FIX", "1") == "1"
+    MAIL_BACKEND = os.environ.get("MAIL_BACKEND", "database")
+
+    @classmethod
+    def validate(cls):
+        problems = []
+        if cls.SECRET_KEY == "dev-only-change-me":
+            problems.append("SECRET_KEY を設定してください")
+        if not cls.BASE_URL.startswith(("http://", "https://")):
+            problems.append("BASE_URL を http:// か https:// から始まる形で設定してください（例：http://203.0.113.10）")
+        if not cls.TRUSTED_HOSTS:
+            problems.append("TRUSTED_HOSTS に、公開する IP アドレスかドメインを設定してください")
+        if not cls.STRIPE_SECRET_KEY.startswith(("sk_test_", "rk_test_")):
+            problems.append("デモでは、Stripe のテスト用のキー（sk_test_）だけを使えます（実際のお金が動かないように）")
+        if not cls.STRIPE_WEBHOOK_SECRET:
+            problems.append("STRIPE_WEBHOOK_SECRET を設定してください")
+        if cls.MAIL_BACKEND not in ("console", "database"):
+            problems.append("デモでは、MAIL_BACKEND は console か database にしてください（実際のメールは送りません）")
+        if problems:
+            raise RuntimeError("デモの設定が足りません：" + " / ".join(problems))
 
 
 class TestingConfig(Config):
@@ -132,5 +171,6 @@ class TestingConfig(Config):
 CONFIGS = {
     "development": DevelopmentConfig,
     "production": ProductionConfig,
+    "demo": DemoConfig,
     "testing": TestingConfig,
 }

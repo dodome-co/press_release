@@ -324,6 +324,18 @@ class Order(db.Model):
     )
 
 
+class MailLog(db.Model):
+    """送らなかったメールの記録（デモ用。MAIL_BACKEND=database のとき）。再設定のリンクなどを含むので、管理者だけが見る。"""
+
+    __tablename__ = "mail_logs"
+
+    id = db.Column(db.Integer, primary_key=True)
+    to_address = db.Column(db.String(255), nullable=False, index=True)
+    subject = db.Column(db.String(255), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow, index=True)
+
+
 REFUND_PENDING = "pending"
 REFUND_SUCCEEDED = "succeeded"
 REFUND_FAILED = "failed"

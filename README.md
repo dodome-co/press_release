@@ -53,3 +53,17 @@ uv run pytest                # テストを実行
 - 本番では、本番用のキーが必須です。テスト用のキーで試すときだけ、`ALLOW_TEST_STRIPE_KEY=1` を付けます。
 - 返金は、管理者の注文詳細の画面から行います（基準は、画面に表示されます）。Stripe の管理画面で直接返金した場合も、`charge.refunded` の通知で、アプリの記録と購入した書類の枠に反映されます。そのため、`stripe listen` の `--events` には、`charge.refunded`、`charge.dispute.created`、`refund.updated`、`refund.failed` も含めてください。
 - 同じ注文に2回目の支払いが届いたとき（古い支払い画面から払われたとき）は、管理者にメールが届きます。Stripe の管理画面で確認して、必要なら返金してください。
+
+## デモ環境（ビジネスプランの発表用）
+
+事業として公開するのではなく、発表のために、VM に置いて、相手に触ってもらう使い方。
+
+- 設定：`APP_ENV=demo`（`SECRET_KEY`、`BASE_URL`（例：`http://203.0.113.10`）、`TRUSTED_HOSTS`、`STRIPE_SECRET_KEY`（**テスト用の `sk_test_` だけ**）、`STRIPE_WEBHOOK_SECRET` が必要）。`MAIL_BACKEND` は、既定で `database`（メールは送らず、管理者の画面 `/admin/mails` に記録）。
+- 画面の上部に、デモであることの表示が出る。
+- サンプルデータ：
+  ```bash
+  uv run flask seed-demo          # 足す（すでにあるものは、そのまま）
+  uv run flask reset-demo --yes   # 管理者以外の会員・注文・書類・メール・ファイルを消して、作り直す
+  ```
+  どちらも、デモ環境（`DEMO_MODE=1` か `APP_ENV=demo`）でだけ動く。ログインできるアカウントと共通のパスワードは、実行したときに表示される（パスワードは、環境変数 `DEMO_PASSWORD` で変えられる）。
+- 手元で試すときは、`.env` に `DEMO_MODE=1` を書いて、`flask db upgrade` のあと、`flask seed-demo` を実行する。
