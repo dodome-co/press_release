@@ -5,6 +5,7 @@ from flask_login import current_user, login_user, logout_user
 from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from .. import ratelimit
 from ..extensions import db
 from ..mail import send_mail
 from ..models import PasswordResetToken, User, utcnow
@@ -46,6 +47,9 @@ def register():
     if current_user.is_authenticated:
         return redirect(url_for("main.index"))
     form = RegisterForm()
+    if request.method == "POST" and not ratelimit.check_and_record(ratelimit.register_per_ip(), ratelimit.client_ip()):
+        flash(TOO_MANY_MESSAGE, "error")
+        return render_template("auth/register.html", form=form), 429
     if form.validate_on_submit():
         user = User(
             email=User.normalize_email(form.email.data),
@@ -70,19 +74,33 @@ def register():
     return render_template("auth/register.html", form=form)
 
 
+LOGIN_LIMIT_MESSAGE = "ログインの試行が多すぎます。しばらく（15分ほど）たってから、もう一度お試しください。"
+TOO_MANY_MESSAGE = "操作が多すぎます。しばらくたってから、もう一度お試しください。"
+
+
 @bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("main.index"))
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(email=User.normalize_email(form.email.data)).first()
+        email = User.normalize_email(form.email.data)
+        ip_limit, fail_limit = ratelimit.login_attempts_per_ip(), ratelimit.login_failures_per_account()
+        # 同じ IP から多すぎる、または、同じメールアドレスで失敗が続いているときは、パスワードを確かめずに止める。
+        # メールアドレスが登録されているかどうかで、結果が変わらないようにする（登録の有無を知られないように）
+        if ratelimit.is_limited(ip_limit, ratelimit.client_ip()) or ratelimit.is_limited(fail_limit, email):
+            flash(LOGIN_LIMIT_MESSAGE, "error")
+            return render_template("auth/login.html", form=form), 429
+        ratelimit.record(ip_limit, ratelimit.client_ip())
+        user = User.query.filter_by(email=email).first()
         if user is None:
             _dummy_check(form.password.data)  # 登録の有無が応答時間で分からないようにする
         if user is not None and user.check_password(form.password.data):
+            ratelimit.clear(fail_limit, email)  # ログインできたら、失敗の記録は消す
             login_user(user)
             next_url = request.args.get("next")
             return redirect(next_url if _is_safe_next(next_url) else url_for("main.index"))
+        ratelimit.record(fail_limit, email)
         flash("メールアドレスまたはパスワードが違います。", "error")
     return render_template("auth/login.html", form=form)
 
@@ -97,9 +115,16 @@ def logout():
 @bp.route("/password/reset", methods=["GET", "POST"])
 def forgot_password():
     form = ForgotPasswordForm()
+    if request.method == "POST" and not ratelimit.check_and_record(
+        ratelimit.reset_request_per_ip(), ratelimit.client_ip()
+    ):
+        flash(TOO_MANY_MESSAGE, "error")
+        return render_template("auth/forgot.html", form=form), 429
     if form.validate_on_submit():
-        user = User.query.filter_by(email=User.normalize_email(form.email.data)).first()
-        if user is not None:
+        email = User.normalize_email(form.email.data)
+        user = User.query.filter_by(email=email).first()
+        # 同じメールアドレス宛ての依頼が多いときは、メールを送らない（画面は、同じにする。メール爆撃を防ぐ）
+        if user is not None and ratelimit.check_and_record(ratelimit.reset_request_per_email(), email):
             minutes = current_app.config["PASSWORD_RESET_EXPIRES_MINUTES"]
             token = PasswordResetToken.issue(user, minutes)
             db.session.commit()

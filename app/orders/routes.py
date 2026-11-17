@@ -1,7 +1,7 @@
 from flask import abort, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user
 
-from .. import payments
+from .. import payments, ratelimit
 from ..auth.decorators import client_required
 from ..extensions import csrf, db
 from ..models import ORDER_UNPAID, Order
@@ -38,6 +38,9 @@ def services():
 def order_service(key):
     if get_service(key) is None:
         abort(404)
+    if not ratelimit.check_and_record(ratelimit.order_per_user(), f"user:{current_user.id}"):
+        flash("申込みの操作が多すぎます。しばらくたってから、もう一度お試しください。", "error")
+        return redirect(url_for("orders.services"))
     try:
         order = service.create_order(current_user, key, request.form.get("materials_url"), request.form.get("option"))
         url = service.start_checkout(order)

@@ -58,6 +58,9 @@ class Config:
     # 書類の入力の長さ（仕様書 F3）
     SERVICE_DESCRIPTION_MAX_LENGTH = int(os.environ.get("SERVICE_DESCRIPTION_MAX_LENGTH", "1000"))
 
+    # 回数制限（app/ratelimit.py）。ログイン失敗・会員登録・パスワード再設定の依頼・申込みの連打を止める
+    RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "1") == "1"
+
     # 認証（仕様書 F1・F1b）
     PASSWORD_MIN_LENGTH = int(os.environ.get("PASSWORD_MIN_LENGTH", "8"))
     PASSWORD_MAX_LENGTH = 128
@@ -163,6 +166,7 @@ class DemoConfig(Config):
 
 class TestingConfig(Config):
     TESTING = True
+    RATE_LIMIT_ENABLED = False  # 回数制限のテストでだけ、有効にする
     # テストが、手元の .env のキーで、実際の Stripe を呼んでしまわないようにする
     STRIPE_SECRET_KEY = ""
     STRIPE_WEBHOOK_SECRET = ""
