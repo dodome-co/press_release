@@ -9,7 +9,7 @@ Type=simple
 User=pressrel
 Group=pressrel
 WorkingDirectory=/opt/press-release
-# 秘密の設定（SECRET_KEY・Stripe のキーなど）。root だけが読める（chmod 600）
+# 秘密の設定（SECRET_KEY・Stripe のキーなど）。root とアプリ用のグループだけが読める（chmod 640）
 EnvironmentFile=/etc/press-release.env
 ExecStart=/opt/press-release/.venv/bin/gunicorn -c deploy/gunicorn.conf.py "app:create_app()"
 ExecReload=/bin/kill -s HUP $MAINPID
