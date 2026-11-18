@@ -12,6 +12,8 @@ threads = int(os.environ.get("GUNICORN_THREADS", 2))
 timeout = 60  # Word の出力や、画像の処理に、時間がかかっても、切らない
 graceful_timeout = 30
 keepalive = 5
+# 管理用の通信口（gunicornc 用）は使わない。systemd の ProtectHome で、ホームフォルダに作れず、ログにエラーが出るため
+control_socket_disable = True
 max_requests = 1000  # 長く動かしても、メモリが増え続けないよう、ときどき作り直す
 max_requests_jitter = 100
 

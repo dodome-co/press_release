@@ -64,8 +64,9 @@ sudo -u pressrel /home/pressrel/.local/bin/uv sync --frozen --no-dev
 ## 4. 設定ファイルを作る（秘密の設定）
 ```bash
 sudo cp /opt/press-release/deploy/env.demo.example /etc/press-release.env
-sudo chown root:root /etc/press-release.env
-sudo chmod 600 /etc/press-release.env
+# アプリ用のユーザー（pressrel）のグループだけが読める。手順5の flask や update.sh が、pressrel でこのファイルを読むため
+sudo chown root:pressrel /etc/press-release.env
+sudo chmod 640 /etc/press-release.env
 sudo nano /etc/press-release.env      # 中身を、自分のものに書き換える
 ```
 書き換えるもの：
@@ -118,7 +119,8 @@ sudo cp /opt/press-release/deploy/press-release.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now press-release
 sudo systemctl status press-release        # 「active (running)」と出ればよい
-curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/     # 200 が出ればよい（VM の中から）
+# 200 が出ればよい（VM の中から）。TRUSTED_HOSTS の守りがあるので、Host に、設定した IP を付ける（付けないと、400 になる。これは正常）
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: 203.0.113.10" http://127.0.0.1:8000/
 ```
 - ログを見る：`sudo journalctl -u press-release -f`（止めるときは Ctrl+C）。
 - 起動に失敗するときは、`journalctl -u press-release -n 50` に、理由が出る（設定の足りないもの、など）。
