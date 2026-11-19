@@ -1,5 +1,7 @@
 # プレスリリースサポートアプリ
 
+[![ci](https://github.com/dodome-co/press_release/actions/workflows/ci.yml/badge.svg)](https://github.com/dodome-co/press_release/actions/workflows/ci.yml)
+
 仕様は [docs/仕様書.md](docs/仕様書.md) を参照。
 
 ## 開発の始め方

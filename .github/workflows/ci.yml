@@ -1,0 +1,99 @@
+# CI：プッシュと PR のたびに、全テストとマイグレーションの確認を、自動で実行する。
+# 結果は、GitHub の PR の画面と「Actions」タブに表示される。
+name: ci
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:  # 「Actions」タブから、手で実行もできる
+
+permissions:
+  contents: read
+
+# 同じブランチで新しくプッシュしたら、古い実行は止める
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 開発と同じ SQLite で、全テスト。開発の Python（3.14）と、VM の Python（3.12）の両方で確かめる
+  test-sqlite:
+    name: テスト（SQLite・Python ${{ matrix.python }}）
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.14"]
+    steps:
+      - name: コードを取得
+        uses: actions/checkout@v7
+
+      - name: uv を準備
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          python-version: ${{ matrix.python }}
+
+      - name: パッケージを入れる
+        run: uv sync --frozen
+
+      - name: 全テスト
+        run: uv run pytest -q
+
+      - name: マイグレーションの確認（空のデータベースに適用し、モデルとのずれがないか）
+        env:
+          APP_ENV: development
+          FLASK_APP: app:create_app
+          DATABASE_URL: sqlite:///ci-migrate.sqlite3
+        run: |
+          uv run flask db upgrade
+          uv run flask db check
+
+  # VM と同じ MySQL 8 で、全テストとマイグレーションの確認
+  test-mysql:
+    name: テスト（MySQL 8.4・Python 3.12）
+    runs-on: ubuntu-24.04
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password  # CI の中だけで使う、使い捨てのデータベース
+          MYSQL_DATABASE: press_release_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -pci-only-password"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      TEST_DATABASE_URL: mysql+pymysql://root:ci-only-password@127.0.0.1:3306/press_release_test?charset=utf8mb4
+    steps:
+      - name: コードを取得
+        uses: actions/checkout@v7
+
+      - name: uv を準備
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: パッケージを入れる
+        run: uv sync --frozen
+
+      - name: 全テスト（MySQL）
+        run: uv run pytest -q
+
+      - name: マイグレーションの確認（空の MySQL に適用し、元に戻し、もう一度適用する）
+        env:
+          APP_ENV: development
+          FLASK_APP: app:create_app
+          DATABASE_URL: mysql+pymysql://root:ci-only-password@127.0.0.1:3306/press_release_migrate?charset=utf8mb4
+        run: |
+          mysql -h 127.0.0.1 -uroot -pci-only-password -e "CREATE DATABASE press_release_migrate CHARACTER SET utf8mb4"
+          uv run flask db upgrade
+          uv run flask db check
+          uv run flask db downgrade base
+          uv run flask db upgrade
