@@ -159,6 +159,14 @@ def test_services_for_visitors_show_everything_but_no_order_forms(client):
     assert "申し込んで支払う" not in body and 'name="option"' not in body and "csrf_token" not in body
 
 
+def test_top_page_explains_what_a_press_release_is(client):
+    """「プレスリリース」が分からない人にも、利用の流れの前で、意味が伝わるようにする。"""
+    body = client.get("/").get_data(as_text=True)
+    definition = "プレスリリースとは、新聞社やテレビ局に、取材に来てもらうための案内文です。"
+    assert definition in body
+    assert body.index("プレスリリースが届くまで") < body.index(definition) < body.index("会員登録（無料）")
+
+
 def test_press_conference_explains_who_is_invited(client):
     """「記者発表会」が分からない人にも、誰を呼ぶためのものかが伝わるようにする。"""
     body = client.get("/services").get_data(as_text=True)
