@@ -30,7 +30,8 @@ def test_top_page_has_the_main_message_and_the_logo(client):
     body = client.get("/").get_data(as_text=True)
     assert "東北のいいものを、地域のメディアに。" in body and "より多くの人に。" in body
     assert "東北のいいものを、地域のメディアに。</span><span>より多くの人に。" in body
-    assert "元地方紙の記者が、御社のリリース作成や地域目線のPR戦略をお手伝いします。" in body
+    assert "元地方紙の記者が、広報戦略を共に考え、地域の新聞社やテレビ局とつながるお手伝いをします。" in body
+    assert "御社のリリース作成や地域目線のPR戦略" not in body
     assert "地域に密着し、御社の広報戦略をサポートします" not in body
     assert 'class="tagline"' in body and 'class="hero-logo"' in body and 'alt="ゆきわり。"' in body
     # 大きい文字の見出しが先、説明が、そのあと
@@ -156,6 +157,12 @@ def test_services_for_visitors_show_everything_but_no_order_forms(client):
                      "10,000円", "10,000円〜", "キャンセル・返金について", "リリース作成以外のサービスは、面談が必須となります。"):
         assert expected in body, expected
     assert "申し込んで支払う" not in body and 'name="option"' not in body and "csrf_token" not in body
+
+
+def test_press_conference_explains_who_is_invited(client):
+    """「記者発表会」が分からない人にも、誰を呼ぶためのものかが伝わるようにする。"""
+    body = client.get("/services").get_data(as_text=True)
+    assert "地元の新聞社や地方のテレビ局などの記者を招き、取材してもらうことを目的にしています。" in body
 
 
 def test_services_for_visitors_have_signup_and_login_links(client):
