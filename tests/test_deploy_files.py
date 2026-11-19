@@ -145,6 +145,21 @@ def test_update_script_migrates_before_restarting_and_does_not_force():
     assert "--frozen --no-dev" in text
 
 
+def test_update_script_runs_as_root_and_does_app_steps_as_pressrel():
+    """pressrel には sudo の権限がないので、スクリプト全体は sudo で動かし、取り込みと更新だけを pressrel で行う。"""
+    text = _read("update.sh")
+    assert "sudo /opt/press-release/deploy/update.sh" in text  # 使い方
+    assert "$EUID -ne 0" in text  # sudo なしで動かしたら、最初に止める
+    assert 'sudo -u "$APP_USER"' in text and "APP_USER=pressrel" in text
+    assert "sudo systemctl" not in text  # 再起動は、すでに管理者の権限で動いているので、sudo を付けない
+    for step in ("git pull --ff-only", "uv sync --frozen --no-dev", "flask db upgrade"):
+        line = next(line for line in text.splitlines() if step in line)
+        assert line.strip().startswith("as_app "), step  # アプリ用のユーザーで実行する
+    guide = Path("docs/VM設置手順.md").read_text(encoding="utf-8")
+    assert "sudo /opt/press-release/deploy/update.sh" in guide
+    assert "sudo -u pressrel /opt/press-release/deploy/update.sh" not in guide
+
+
 def test_backup_script_uses_sqlite_backup_and_keeps_seven_days():
     text = _read("backup.sh")
     assert ".backup" in text and "cp " not in text  # 動いている最中に、ファイルを、単にコピーしない

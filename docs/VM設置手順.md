@@ -172,7 +172,7 @@ sudo systemctl reload nginx
 - [ ] 発表の直前に、データを元に戻す：`flask reset-demo --yes`（管理者以外の会員・書類・注文・メール・ファイルを消して、サンプルを作り直す）。
 
 ## 10. 日々の運用
-- **更新**（コードを、新しくしたとき）：`sudo -u pressrel /opt/press-release/deploy/update.sh`（最新を取り込み、データベースを更新し、再起動する。再起動には、`sudo` の権限が要る）。
+- **更新**（コードを、新しくしたとき）：`sudo /opt/press-release/deploy/update.sh`（main の最新を取り込み、パッケージを入れ、データベースを更新し、再起動する。`sudo` が使えるユーザーで実行する。取り込みと更新は、スクリプトの中で、アプリ用のユーザー（pressrel）の権限で行う）。
 - **バックアップ**：`sudo /opt/press-release/deploy/backup.sh`（データベースとアップロードを、`/var/backups/press-release` に保存。7日分）。毎日動かすなら、`sudo crontab -e` に `0 3 * * * /opt/press-release/deploy/backup.sh` を書く。
 - **デモのデータを戻す**：`flask reset-demo --yes`（手順5と同じ環境変数の読み込みで実行）。
 - **ログ**：アプリは `sudo journalctl -u press-release`、Nginx は `/var/log/nginx/`。

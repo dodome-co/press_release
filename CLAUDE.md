@@ -39,7 +39,7 @@ uv run flask reset-demo --yes  # デモのデータを作り直す（デモ環�
 ```
 
 - MySQL で全テストを通すときは、テスト専用のデータベースを `TEST_DATABASE_URL`（`.env` に書いてよい）で指定して `uv run pytest`。テストは毎回、全テーブルを作って消すので、本物のデータが入ったデータベースは指定しない。
-- VM の更新は `sudo -u pressrel /opt/press-release/deploy/update.sh`（main を取り込み、`db upgrade` して、再起動する）。
+- VM の更新は `sudo /opt/press-release/deploy/update.sh`（main を取り込み、`db upgrade` して、再起動する。取り込みと更新は、スクリプトの中で pressrel の権限で行う）。手元からは `ssh press-vm` で VM に入れる。
 
 ## 構成
 
