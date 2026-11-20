@@ -1,11 +1,12 @@
-from flask import abort, current_app, flash, redirect, render_template, request, url_for
+from flask import abort, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user
 
+from .. import ai, ratelimit
 from ..auth.decorators import client_required
 from ..extensions import db
 from ..models import MAX_PHOTOS, MAX_SCHEDULE_ITEMS, Release, ReleasePhoto
 from ..uploads import UploadError
-from . import bp, notifications, service
+from . import bp, chat, notifications, service
 from .forms import ReleaseForm
 
 
@@ -75,7 +76,25 @@ def edit(release_id):
         schedule=schedule,
         max_photos=MAX_PHOTOS,
         missing=service.missing_required(release),
+        ai_ready=ai.is_configured(),
+        first_question=ai.FIRST_QUESTION,
+        chat_remaining=chat.remaining_calls(release),
     )
+
+
+@bp.post("/<int:release_id>/chat")
+@client_required
+def chat_send(release_id):
+    """AI とのチャット（画面の JavaScript から呼ぶ）。答えは JSON で返す。"""
+    release = _owned_release_or_404(release_id)
+    if not ratelimit.check_and_record(ratelimit.ai_chat_per_user(), f"user:{current_user.id}"):
+        return jsonify(error="送る回数が多すぎます。しばらくたってから、もう一度お試しください。"), 429
+    data = request.get_json(silent=True) or {}
+    try:
+        result = chat.send(release, data.get("message", ""), data.get("input_method", "text"))
+    except chat.ChatError as e:
+        return jsonify(error=str(e)), e.status
+    return jsonify(result)
 
 
 @bp.post("/<int:release_id>/photos")

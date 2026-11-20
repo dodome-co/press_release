@@ -118,3 +118,8 @@ def reset_request_per_email() -> Limit:
 
 def order_per_user() -> Limit:
     return Limit("order_user", _cfg("RATE_ORDER_USER_MAX", 10), _cfg("RATE_ORDER_USER_SECONDS", 10 * 60))
+
+
+def ai_chat_per_user() -> Limit:
+    """AI のチャットの連打を止める（料金がかかるため）。"""
+    return Limit("ai_chat_user", _cfg("RATE_AI_CHAT_USER_MAX", 20), _cfg("RATE_AI_CHAT_USER_SECONDS", 10 * 60))

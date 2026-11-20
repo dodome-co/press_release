@@ -62,6 +62,14 @@ class Config:
     # 書類の入力の長さ（仕様書 F3）
     SERVICE_DESCRIPTION_MAX_LENGTH = int(os.environ.get("SERVICE_DESCRIPTION_MAX_LENGTH", "1000"))
 
+    # AI（Claude API。app/ai.py）。キーが空なら、AI の機能は「準備中」と表示する
+    ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+    AI_MODEL = os.environ.get("AI_MODEL", "claude-opus-5-5")
+    AI_EFFORT = os.environ.get("AI_EFFORT", "low")  # チャットは速さを優先する（low / medium / high）
+    AI_TIMEOUT_SECONDS = int(os.environ.get("AI_TIMEOUT_SECONDS", "45"))
+    # 1つの書類で、AI を呼べる回数（料金の使いすぎを防ぐ）
+    AI_MAX_CALLS_PER_RELEASE = int(os.environ.get("AI_MAX_CALLS_PER_RELEASE", "30"))
+
     # 回数制限（app/ratelimit.py）。ログイン失敗・会員登録・パスワード再設定の依頼・申込みの連打を止める
     RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "1") == "1"
 
@@ -176,6 +184,8 @@ class TestingConfig(Config):
     STRIPE_WEBHOOK_SECRET = ""
     SUPPORT_EMAIL = ""
     COMPANY_ADDRESS = ""
+    # テストが、手元の .env のキーで、実際の AI を呼んでしまわないようにする（料金がかかる）
+    ANTHROPIC_API_KEY = ""
     # 既定はメモリ上の SQLite。MySQL で全テストを通すときは、TEST_DATABASE_URL に、テスト専用のデータベースを指定する
     # （テストごとに、全テーブルを作って消すので、本物のデータが入ったデータベースは、指定しない）
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL", "sqlite:///:memory:")

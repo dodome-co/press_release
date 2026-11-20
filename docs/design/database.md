@@ -1,6 +1,6 @@
 # データベース設計
 
-テーブルは13個。定義は [app/models.py](../../app/models.py)、変更の履歴は `migrations/versions/`（Flask-Migrate）にある。このファイルの列の一覧は、モデルから取り出したもの。値の決まりや返金の規則などの細かい説明は [../データベース設計.md](../データベース設計.md) を参照。
+テーブルは14個。定義は [app/models.py](../../app/models.py)、変更の履歴は `migrations/versions/`（Flask-Migrate）にある。このファイルの列の一覧は、モデルから取り出したもの。値の決まりや返金の規則などの細かい説明は [../データベース設計.md](../データベース設計.md) を参照。
 
 - データベース：開発とテストは SQLite、VM（デモ）は MySQL 8（文字コード `utf8mb4`）。SQLAlchemy を通して使い、どちらでも同じコードで動く。
 - 全テストを、SQLite と MySQL の両方で通している。
@@ -19,6 +19,7 @@ erDiagram
     releases ||--o{ release_photos : "写真（2枚まで）"
     releases ||--o{ release_schedule_items : "当日のスケジュール（5行まで）"
     releases ||--o{ release_edits : "編集の履歴"
+    releases ||--o{ ai_chat_messages : "AI とのやりとり"
     orders ||--o{ order_checkout_sessions : "支払い画面の履歴"
     orders ||--o{ order_refunds : "返金の履歴"
 
@@ -105,6 +106,13 @@ erDiagram
         string to_address
         string subject
     }
+    ai_chat_messages {
+        int id PK
+        int release_id FK
+        string role "client / ai"
+        text content
+        string input_method "text / voice"
+    }
 ```
 
 - `stripe_events`、`rate_limit_events`、`mail_logs` は、ほかのテーブルとつながらない記録用のテーブル。
@@ -175,7 +183,7 @@ stateDiagram-v2
 | テーブル | 動き |
 | --- | --- |
 | password_reset_tokens、releases、service_profiles | 会員と一緒に消える（`ON DELETE CASCADE`）。写真と Word のファイルも消す |
-| release_photos、release_schedule_items、release_edits | 書類と一緒に消える（CASCADE） |
+| release_photos、release_schedule_items、release_edits、ai_chat_messages | 書類と一緒に消える（CASCADE） |
 | orders | 消さずに残す。`user_id` を空にし（`SET NULL`）、素材のリンクと納品物を消す。金額・日付・状態は残す |
 | order_checkout_sessions、order_refunds | 注文と一緒に残る |
 | 管理者を指す列（approved_by、last_edited_by、edited_by、created_by） | 管理者を消したときは空にする（`SET NULL`） |
@@ -352,7 +360,7 @@ stateDiagram-v2
 | 列 | 型 | 必須 | 制約・メモ |
 | --- | --- | --- | --- |
 | id | 整数 | ○ | 主キー |
-| scope | 文字列(30) | ○ | 何の制限か（`login_ip`、`login_fail`、`register_ip`、`reset_ip`、`reset_email`、`order_user`） |
+| scope | 文字列(30) | ○ | 何の制限か（`login_ip`、`login_fail`、`register_ip`、`reset_ip`、`reset_email`、`order_user`、`ai_chat_user`） |
 | key_hash | 文字列(64) | ○ | 相手（IP・メールアドレス・会員ID）のハッシュ。元の値は保存しない |
 | created_at | 日時 | ○ | インデックス。(scope, key_hash, created_at) にもインデックス |
 
@@ -367,3 +375,18 @@ stateDiagram-v2
 | created_at | 日時 | ○ | インデックス |
 
 - デモ（`MAIL_BACKEND=database`）のとき、メールを送る代わりに、ここに記録する。管理者の `/admin/mails` で見る。
+
+### 5-14. ai_chat_messages（AI とのやりとり）
+
+| 列 | 型 | 必須 | 制約・メモ |
+| --- | --- | --- | --- |
+| id | 整数 | ○ | 主キー |
+| release_id | 整数 | ○ | → releases.id（CASCADE）、インデックス |
+| role | 文字列(20) | ○ | `client`（クライアントの発言）/ `ai`（AI の返事） |
+| content | テキスト | ○ | 発言の本文 |
+| input_method | 文字列(10) | ○ | `text` / `voice`（音声入力は、あとで作る） |
+| created_at | 日時 | ○ | |
+
+- 書類の入力画面のチャットで、1往復ごとに2行（`client` と `ai`）を足す。AI につながらなかったときは、何も足さない。
+- `ai` の行の数を、その書類で AI を呼んだ回数として数える（上限は `AI_MAX_CALLS_PER_RELEASE`）。
+- 最初の質問は、決まった文（`app/ai.py` の `FIRST_QUESTION`）なので、保存しない。
