@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-プレスリリース作成支援アプリ「ゆきわり。」。クライアント（地域の中小企業）が入力した内容から、元記者の管理者が要旨を書いて承認し、プレスリリースの PDF を出力する Flask アプリ。有料サービスの申込み（Stripe）もある。ビジネスプランの発表用のデモとして、Google Cloud の VM で動かしている。
+プレスリリース作成支援アプリ「ねたもと。」（旧称「ゆきわり。」）。クライアント（地域の中小企業）が入力した内容から、元記者の管理者が要旨を書いて承認し、プレスリリースの PDF を出力する Flask アプリ。有料サービスの申込み（Stripe）もある。ビジネスプランの発表用のデモとして、Google Cloud の VM で動かしている。
 
 - 要件：[docs/spec/requirements.md](docs/spec/requirements.md)（詳細は [docs/仕様書.md](docs/仕様書.md)）
 - 画面：[docs/design/screens.md](docs/design/screens.md)

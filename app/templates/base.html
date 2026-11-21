@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}プレスリリースサポート{% endblock %}</title>
+  <title>{% block title %}ねたもと。{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
@@ -16,8 +16,8 @@
   <header class="site-header">
    <div class="site-header-inner">
     <a class="brand" href="{{ url_for('main.index') }}">
-      {% if logo_url %}<img src="{{ logo_url }}" alt="ゆきわり。">{% endif %}
-      <span>プレスリリースサポート</span>
+      {% if logo_url %}<img src="{{ logo_url }}" alt="ねたもと。">{% endif %}
+      <span>プレスリリース支援</span>
     </a>
     <nav class="site-nav">
       {% if current_user.is_authenticated and not current_user.is_admin %}

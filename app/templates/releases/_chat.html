@@ -2,7 +2,7 @@
 {% macro chat_item(role, text, time=None) %}
 {% if role == 'ai' %}
 <li class="chat-ai">
-  <img class="chat-avatar" src="{{ url_for('static', filename='img/ai-avatar.webp') }}" alt="ゆきわり。の AI" width="40" height="40">
+  <img class="chat-avatar" src="{{ url_for('static', filename='img/ai-avatar.webp') }}" alt="ねたもと。の AI" width="40" height="40">
   <div class="chat-body"><span class="chat-bubble">{{ text }}</span>{% if time %}<time class="chat-time">{{ time }}</time>{% endif %}</div>
 </li>
 {% else %}

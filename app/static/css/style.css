@@ -1,4 +1,4 @@
-/* プレスリリースサポート：画面の見た目。ロゴ（ゆきわり。）の、オリーブグリーンとクリーム色を基調にする。
+/* ねたもと。：画面の見た目。ロゴ（ねたもと。）の、オリーブグリーンとクリーム色を基調にする。
    色は、ここ（:root）で決める。変えるときは、この部分だけを直す。 */
 :root {
   --primary: #566900;        /* ロゴの文字の、オリーブグリーン（見出し・ボタン・リンク） */
@@ -181,14 +181,16 @@ section.hero {
 }
 section.hero .hero-logo { display: block; width: 100%; max-width: 560px; height: auto; margin: 0 auto 18px; }
 section.hero h1 { border: 0; font-size: 1.5rem; margin-bottom: 10px; padding-bottom: 0; }
+section.hero h1.hero-catch { font-size: 2.1rem; font-weight: 700; line-height: 1.45; margin: 6px 0 8px; color: var(--primary); }
+section.hero h1.hero-catch span { display: inline-block; }  /* 読点で、折り返す */
 section.hero .tagline {
-  margin: 4px auto 18px;
-  font-size: 2.1rem;          /* 大きめの文字 */
-  font-weight: 700;
+  margin: 0 auto 18px;
+  font-size: 1.1rem;          /* メインの下に、小さく添える説明 */
+  font-weight: 600;
   line-height: 1.6;
-  color: var(--primary);
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
-section.hero .tagline span { display: inline-block; }  /* 文の区切りで、改行する */
 section.hero .hero-lead { font-size: 1.1rem; }
 section.hero p { font-size: 1.02rem; }
 section.hero .hero-actions { margin: 8px 0 12px; }
@@ -260,7 +262,8 @@ hr { border: 0; border-top: 1px solid var(--primary-line); margin: 24px 0; }
   main { padding: 20px 14px 40px; }
   main > section, main > form { padding: 16px 16px 6px; }
   h1 { font-size: 1.4rem; }
-  section.hero .tagline { font-size: 1.5rem; }
+  section.hero h1.hero-catch { font-size: 1.6rem; }
+  section.hero .tagline { font-size: 1rem; }
   .site-header-inner { padding: 8px 14px; }
   table { display: block; overflow-x: auto; }
 }

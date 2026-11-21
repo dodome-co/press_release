@@ -124,10 +124,10 @@ def test_demo_banner_uses_a_class_not_inline_style(client, app):
 
 
 # ---- ロゴ ----
-def test_yukiwari_logo_is_shown_in_the_header_by_default(client):
+def test_netamoto_logo_is_shown_in_the_header_by_default(client):
     body = client.get("/").get_data(as_text=True)
     header = body[body.index('class="brand"'):body.index("</a>", body.index('class="brand"'))]
-    assert '<img src="/static/img/logo.webp" alt="ゆきわり。">' in header and "プレスリリースサポート" in header
+    assert '<img src="/static/img/logo.webp" alt="ねたもと。">' in header and "プレスリリース支援" in header
 
 
 def test_logo_file_exists_and_is_served(client):
@@ -157,7 +157,7 @@ def test_no_logo_when_the_file_is_missing(app, client, tmp_path):
     app.static_folder = str(tmp_path / "no-static")
     body = client.get("/").get_data(as_text=True)
     header = body[body.index('class="brand"'):body.index("</a>", body.index('class="brand"'))]
-    assert "<img" not in header and "プレスリリースサポート" in header
+    assert "<img" not in header and "プレスリリース支援" in header
 
 
 @pytest.mark.parametrize("ext", ["png", "svg", "webp", "jpg"])

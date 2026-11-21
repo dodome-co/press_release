@@ -21,7 +21,7 @@ def notify_submitted(release: Release) -> None:
     for admin in User.query.filter_by(role=ROLE_ADMIN).all():
         _send(
             admin.email,
-            "【プレスリリースサポート】承認待ちの書類が提出されました",
+            "【ねたもと。】承認待ちの書類が提出されました",
             f"{release.user.company_name} から、承認待ちの書類が提出されました。\n"
             f"タイトル：{release.title}\n\n確認はこちら：\n{link}",
         )
@@ -47,7 +47,7 @@ def notify_approved(release: Release) -> None:
     changes = _changes_text(release)
     if changes:
         body += f"\n管理者が、次の内容を修正しました。\n{changes}\n"
-    _send(release.user.email, "【プレスリリースサポート】書類が承認されました", body)
+    _send(release.user.email, "【ねたもと。】書類が承認されました", body)
 
 
 def notify_rejected(release: Release) -> None:
@@ -55,7 +55,7 @@ def notify_rejected(release: Release) -> None:
     link = external_url("releases.edit", release_id=release.id)
     _send(
         release.user.email,
-        "【プレスリリースサポート】書類が差し戻されました",
+        "【ねたもと。】書類が差し戻されました",
         f"「{release.title}」が差し戻されました。\n\n理由：\n{release.reject_reason}\n\n"
         f"内容を直して、もう一度提出してください。\n{link}",
     )

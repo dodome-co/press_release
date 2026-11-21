@@ -31,7 +31,7 @@
       var img = document.createElement("img");
       img.className = "chat-avatar";
       img.src = avatar;
-      img.alt = "ゆきわり。の AI";
+      img.alt = "ねたもと。の AI";
       img.width = 40;
       img.height = 40;
       li.appendChild(img);
