@@ -107,6 +107,9 @@ def send(release: Release, text: str, input_method: str = CHAT_INPUT_TEXT) -> di
         input_method = CHAT_INPUT_TEXT
     if not service.client_can_edit(release):
         raise ChatError("この書類は、いまは編集できません。", 409)
+    if not (release.event_date and release.event_start_time and (release.location or "").strip()):
+        # 日時と場所は、フォームで入力して保存してから（AI が、日時を聞き直さないように）
+        raise ChatError("先に、取材の日付・開始時刻・場所を入力して、「保存する」を押してください。", 400)
     if remaining_calls(release) <= 0:
         raise ChatError("この書類で AI を使える回数の上限に達しました。運営者にご相談ください。", 429)
 

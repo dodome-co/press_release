@@ -22,7 +22,7 @@
   <p class="error">差し戻しの理由：{{ release.reject_reason }}</p>
 {% endif %}
 
-<h2>{% if release.title %}【取材のお願い】{{ release.title }}{% else %}（タイトルは、管理者が決めます）{% endif %}</h2>
+<h2>{% if release.title %}{{ release.title }}{% else %}（タイトルは、管理者が決めます）{% endif %}</h2>
 {% if release.subtitle %}<p><strong>～{{ release.subtitle }}～</strong></p>{% endif %}
 {% if release.summary %}<p style="white-space:pre-wrap">{{ release.summary }}</p>{% else %}<p>（要旨は、AI とのチャットのあとに、まとめられます）</p>{% endif %}
 

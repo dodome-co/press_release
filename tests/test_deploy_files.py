@@ -57,8 +57,28 @@ def test_nginx_requires_a_password_except_for_the_stripe_webhook():
     webhook = conf[conf.index("location = /stripe/webhook"):]
     webhook = webhook[:webhook.index("}\n", webhook.index("proxy_pass")) + 1]
     assert "auth_basic off;" in webhook and "limit_except POST { deny all; }" in webhook
-    # 合言葉の対象外は、webhook だけ
-    assert conf.count("auth_basic off;") == 1
+    # 合言葉の対象外は、webhook と、証明書の取得（Let's Encrypt）用の入口だけ
+    assert conf.count("auth_basic off;") == 2
+    acme = conf[conf.index("location /.well-known/acme-challenge/"):]
+    acme = acme[:acme.index("}") + 1]
+    assert "auth_basic off;" in acme and "root /var/www/certbot;" in acme
+
+
+def test_https_config_redirects_http_and_protects_the_app():
+    """HTTPS の設定：80 番は、証明書の確認以外を HTTPS に移す。443 番に、合言葉・証明書・webhook の例外がある。"""
+    conf = _read("nginx-press-release-https.conf")
+    http, https = conf.split("listen 443", 1)
+    assert "location /.well-known/acme-challenge/" in http and "return 301 https://34-85-70-93.sslip.io$request_uri;" in http
+    assert "proxy_pass" not in http  # 80 番では、アプリに渡さない
+    assert "ssl_certificate /etc/letsencrypt/live/34-85-70-93.sslip.io/fullchain.pem;" in https
+    assert "ssl_certificate_key /etc/letsencrypt/live/34-85-70-93.sslip.io/privkey.pem;" in https
+    assert "ssl_protocols TLSv1.2 TLSv1.3;" in https
+    assert "auth_basic_user_file /etc/nginx/press-release.htpasswd;" in https
+    assert https.count("auth_basic off;") == 1  # 443 番の例外は、webhook だけ
+    assert "client_max_body_size 12m;" in https
+    assert "location ~ /\\.(?!well-known) { deny all; }" in https
+    assert "listen 443 ssl http2" in conf  # Nginx 1.24（Ubuntu 24.04）の書き方。「http2 on;」は使えない
+    assert "\n    http2 on;" not in conf
 
 
 def test_nginx_allows_the_biggest_upload_and_hides_dotfiles():

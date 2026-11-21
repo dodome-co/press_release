@@ -40,7 +40,7 @@ def _storage(data=None):
 
 def test_basic_fields_are_filled(app, client_user):
     text = _text(_doc(_release(client_user)))
-    for expected in ("報道関係者各位", f"【取材のお願い】{FULL['title']}", "要旨です。", "2026年12月1日（火） 14:00〜16:00",
+    for expected in ("報道関係者各位", FULL["title"], "要旨です。", "2026年12月1日（火） 14:00〜16:00",
                      FULL["location"], "◆ 商品の特徴", "・速い", "株式会社テスト",
                      "〒123-4567 東京都千代田区1-1-1", "TEL：03-1234-5678", "E-mail：client@example.com"):
         assert expected in text, expected
@@ -64,7 +64,7 @@ def test_subtitle_and_speakers_are_shown(app, client_user):
     for expected in ("～地域の農家と連携～", "◆ 当日の対応者", "社長　岩手　盛子", "栗生産者　花巻　賢治"):
         assert expected in text, expected
     lines = text.splitlines()
-    assert lines.index(f"【取材のお願い】{FULL['title']}") < lines.index("～地域の農家と連携～") < lines.index("要旨です。")
+    assert lines.index(FULL["title"]) < lines.index("～地域の農家と連携～") < lines.index("要旨です。")
     assert lines.index("◆ 日時・会場") < lines.index("◆ 当日の対応者") < lines.index("◆ 商品の特徴")
 
 
@@ -179,7 +179,7 @@ def test_title_is_centered(app, client_user):
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
     doc = _doc(_release(client_user))
-    title = next(p for p in doc.paragraphs if p.text.startswith("【取材のお願い】"))
+    title = next(p for p in doc.paragraphs if p.text == FULL["title"])
     assert title.alignment == WD_ALIGN_PARAGRAPH.CENTER
 
 

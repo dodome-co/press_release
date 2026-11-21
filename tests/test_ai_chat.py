@@ -4,6 +4,7 @@
 `app.ai._client` を偽物にして、送る内容と、返事の読み取りを確かめる。
 """
 import json
+from datetime import date, time
 from types import SimpleNamespace
 
 import anthropic
@@ -26,7 +27,11 @@ def ai_on(app):
 
 @pytest.fixture()
 def draft(client_user):
-    return service.create_draft(client_user)
+    """日付・時刻・場所を、保存した下書き（平日の午前中。日時の確認は出ない）。"""
+    release = service.create_draft(client_user)
+    release.event_date, release.event_start_time, release.location = date(2026, 12, 4), time(10, 0), "本店"
+    db.session.commit()
+    return release
 
 
 @pytest.fixture()
@@ -142,8 +147,8 @@ def test_complete_saves_what_ai_composed_and_asks_for_photos(logged_in, draft, f
     assert draft.features == ["栗は100％", "岩手産の米粉を使用", "砂糖控えめ"]  # 最大3つ
     assert draft.summary.endswith("ご案内申し上げます。") and draft.summary_source == "ai_assisted"
     assert draft.speaker_list == ["社長　岩手　盛子", "栗生産者　花巻　賢治"]
-    # この書類は、提出できる（日付・時刻・場所を入れたあと）
-    assert service.missing_required(draft) == ["取材会の日付", "開始時刻", "場所"]
+    # この書類は、提出できる（日付・時刻・場所は、チャットの前に、保存してある）
+    assert service.missing_required(draft) == []
 
 
 def test_compose_gets_the_whole_conversation(logged_in, draft, fake_ai):
@@ -355,8 +360,6 @@ def test_interview_connection_error(app, ai_on, monkeypatch):
 
 
 # ---- 取材の日時の確認（よいプレスリリースの定義 7章・9章） ----
-from datetime import date, time  # noqa: E402
-
 from app.releases import chat as chat_service  # noqa: E402
 
 
@@ -481,3 +484,73 @@ def test_compose_keeps_titles_if_none_fit(app, ai_on, monkeypatch):
     _fake_client(monkeypatch, _response({**COMPOSED, "titles": ["あ" * 30, "い" * 25]}))
     with app.test_request_context():
         assert len(ai.compose({}, [("client", "x")]).titles) == 2  # 管理者が直せるよう、残す
+
+
+# ---- 日時と場所は、先に保存してから（AI が、日時を聞き直さないように） ----
+def test_chat_requires_saved_date_time_and_place(logged_in, client_user, fake_ai):
+    release = service.create_draft(client_user)  # 日付・時刻・場所が、まだ保存されていない
+    res = _send(logged_in, release)
+    assert res.status_code == 400 and "先に、取材の日付・開始時刻・場所を入力して、「保存する」を押してください" in res.get_json()["error"]
+    assert not fake_ai.calls and AIChatMessage.query.count() == 0
+
+
+@pytest.mark.parametrize("missing", ["event_date", "event_start_time", "location"])
+def test_chat_requires_each_of_date_time_and_place(logged_in, draft, fake_ai, missing):
+    setattr(draft, missing, None if missing != "location" else "  ")
+    db.session.commit()
+    assert _send(logged_in, draft).status_code == 400 and not fake_ai.calls
+
+
+def test_system_prompt_says_date_and_place_are_already_entered(app, ai_on, monkeypatch):
+    sent = _fake_client(monkeypatch, _response(GOOD))
+    with app.test_request_context():
+        ai.interview({"取材会の日時": "2026年12月4日（金） 10:00〜", "場所": "本店"}, [("client", "x")])
+    system = sent.kwargs["system"]
+    assert "日時と場所は、聞かない" in system and "2026年12月4日（金） 10:00〜" in system
+
+
+# ---- 画面：LINE のような吹き出し、AI のアイコン、保存の注意、マイクのボタン ----
+def test_chat_screen_is_line_style_with_avatar_and_mic(logged_in, draft, ai_on):
+    from app.models import CHAT_ROLE_AI as AI
+
+    db.session.add(AIChatMessage(release_id=draft.id, role=CHAT_ROLE_CLIENT, content="新しい和菓子です"))
+    db.session.add(AIChatMessage(release_id=draft.id, role=AI, content="どこが新しいですか？"))
+    db.session.commit()
+    body = logged_in.get(f"/releases/{draft.id}/edit").get_data(as_text=True)
+    assert 'class="chat-avatar"' in body and "img/ai-avatar.webp" in body  # AI のアイコン（ロゴの女の子）
+    assert 'class="chat-bubble"' in body and 'class="chat-read"' in body and "既読" in body  # 自分の発言に「既読」
+    assert 'class="chat-time"' in body  # AI の発言に時刻
+    assert 'class="chat-mic"' in body and "音声で入力する" in body  # マイクのボタン
+    assert f'data-avatar="/static/img/ai-avatar.webp"' in body
+    assert "※必ず保存してください" in body  # 保存ボタンの隣の注意
+
+
+def test_avatar_file_exists_and_is_small():
+    from pathlib import Path
+
+    path = Path("app/static/img/ai-avatar.webp")
+    assert path.is_file() and path.stat().st_size < 30_000
+
+
+def test_chat_time_is_shown_in_japan_time(app):
+    from datetime import datetime
+
+    with app.app_context():
+        clock = app.jinja_env.filters["clock"]
+        assert clock(datetime(2026, 11, 21, 8, 36)) == "午後5:36"  # UTC 8:36 = 日本時間 17:36
+        assert clock(datetime(2026, 11, 21, 0, 5)) == "午前9:05"
+        assert clock(datetime(2026, 11, 21, 15, 0)) == "午前12:00"  # 日本時間の 0:00（LINE と同じ言い方）
+        assert clock(None) == ""
+
+
+def test_voice_input_is_saved_as_voice(logged_in, draft, fake_ai):
+    _send(logged_in, draft, "声で答えました", input_method="voice")
+    msg = AIChatMessage.query.filter_by(release_id=draft.id, role=CHAT_ROLE_CLIENT).one()
+    assert msg.input_method == "voice"
+    _send(logged_in, draft, "文字で答えました", input_method="なんでも")  # 知らない値は、文字として扱う
+    assert AIChatMessage.query.filter_by(role=CHAT_ROLE_CLIENT).order_by(AIChatMessage.id.desc()).first().input_method == "text"
+
+
+def test_save_note_is_next_to_the_save_button(logged_in, draft):
+    body = logged_in.get(f"/releases/{draft.id}/edit").get_data(as_text=True)
+    assert body.index("保存する</button>") < body.index("※必ず保存してください") < body.index("AI と話して、内容を伝える")

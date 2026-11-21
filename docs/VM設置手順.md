@@ -171,6 +171,32 @@ sudo systemctl reload nginx
 - [ ] 画像（写真・ロゴ）のアップロードと、記事（docx・pdf）の納品ができる（Nginx の `client_max_body_size` は、12MB）。
 - [ ] 発表の直前に、データを元に戻す：`flask reset-demo --yes`（管理者以外の会員・書類・注文・メール・ファイルを消して、サンプルを作り直す）。
 
+## 9b. HTTPS にする（音声入力のため）
+ブラウザは、https:// のページでしか、マイク（音声入力）を使わせない。IP アドレスのままでは取れないので、IP から自動で引ける名前（`34-85-70-93.sslip.io`。IP を変えたら、名前も変える）と、無料の証明書（Let's Encrypt）を使う。
+1. **ファイアウォール**：Google Cloud のコンソールで、VM の詳細 →「編集」→「HTTPS トラフィックを許可する」にチェック（443 番）。
+2. **証明書の取得**（VM で）：
+   ```bash
+   sudo apt-get install -y certbot
+   sudo mkdir -p /var/www/certbot
+   # 取得用の入口を足した HTTP の設定に、いったん差し替える（deploy/nginx-press-release.conf）
+   sudo cp /opt/press-release/deploy/nginx-press-release.conf /etc/nginx/sites-available/press-release
+   sudo nginx -t && sudo systemctl reload nginx
+   sudo certbot certonly --webroot -w /var/www/certbot -d 34-85-70-93.sslip.io \
+        --non-interactive --agree-tos --register-unsafely-without-email
+   # 更新のあと、Nginx に新しい証明書を読み込ませる
+   printf '#!/bin/sh\nsystemctl reload nginx\n' | sudo tee /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+   sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-nginx.sh
+   ```
+   メールアドレスは、登録しない（有効期限の通知は届かないが、自動で更新される。90日ごと）。
+3. **Nginx を HTTPS の設定にする**：
+   ```bash
+   sudo cp /opt/press-release/deploy/nginx-press-release-https.conf /etc/nginx/sites-available/press-release
+   sudo nginx -t && sudo systemctl reload nginx
+   ```
+4. **アプリの設定**（`/etc/press-release.env`）：`TRUSTED_HOSTS=34.85.70.93,34-85-70-93.sslip.io`、`BASE_URL=https://34-85-70-93.sslip.io`。書き換えたら、`sudo systemctl restart press-release`。
+5. **確認**：`https://34-85-70-93.sslip.io/` を開く（合言葉が要る）。`http://` で開くと、HTTPS に移る。書類の入力画面のチャットで、マイクのボタンが押せる（Chrome・Edge）。
+- Stripe の Webhook を使うときは、URL を `https://34-85-70-93.sslip.io/stripe/webhook` にする（手順8）。
+
 ## 10. 日々の運用
 - **更新**（コードを、新しくしたとき）：`sudo /opt/press-release/deploy/update.sh`（main の最新を取り込み、パッケージを入れ、データベースを更新し、再起動する。`sudo` が使えるユーザーで実行する。取り込みと更新は、スクリプトの中で、アプリ用のユーザー（pressrel）の権限で行う）。
 - **バックアップ**：`sudo /opt/press-release/deploy/backup.sh`（データベースとアップロードを、`/var/backups/press-release` に保存。7日分）。毎日動かすなら、`sudo crontab -e` に `0 3 * * * /opt/press-release/deploy/backup.sh` を書く。

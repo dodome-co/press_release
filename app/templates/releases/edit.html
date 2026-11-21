@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "auth/_field.html" import field %}
+{% from "releases/_chat.html" import chat_item %}
 {% block title %}書類の入力{% endblock %}
 {% block content %}
 <h1>書類の入力</h1>
@@ -17,28 +18,32 @@
   <p class="field-hint">取材は平日の、午前中か{{ latest_start_label }}までがおすすめです。</p>
   {{ field(form.location) }}
   <button type="submit">保存する</button>
+  <small class="save-note">※必ず保存してください</small>
 </form>
-<p class="field-hint">日時と場所を入れて「保存する」を押してから、下の AI とのチャットに進んでください。</p>
 
 <section class="chat" id="ai-chat"
          data-url="{{ url_for('releases.chat_send', release_id=release.id) }}"
-         data-csrf="{{ csrf_token() }}">
+         data-csrf="{{ csrf_token() }}"
+         data-avatar="{{ url_for('static', filename='img/ai-avatar.webp') }}">
   <h2>2. AI と話して、内容を伝える</h2>
   {% if ai_ready %}
   <p>AI が、取材してほしいサービスや商品について、質問します。答えていくと、AI が、プレスリリースの内容（特徴・要旨など）をまとめます。</p>
   <div class="chat-window">
     <ol class="chat-log" aria-live="polite">
-      <li class="chat-ai">{{ first_question }}</li>
+      {{ chat_item('ai', first_question) }}
       {% for m in release.chat_messages %}
-      <li class="chat-{{ m.role }}">{{ m.content }}</li>
+      {{ chat_item(m.role, m.content, m.created_at|clock) }}
       {% endfor %}
     </ol>
     <p class="chat-status" role="status"></p>
     <form class="chat-form">
+      <button type="button" class="chat-mic" aria-label="音声で入力する" title="音声で入力する" hidden>
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V22h2v-3.08A7 7 0 0 0 19 12h-2z"/></svg>
+      </button>
       <label for="chat-message" class="visually-hidden">あなたの答え</label>
       <textarea id="chat-message" name="message" rows="2" maxlength="{{ config['INPUT_MAX_LENGTH'] }}"
                 placeholder="ここに答えを入力（Enterで送信、Shift+Enterで改行）"></textarea>
-      <button type="submit">送る</button>
+      <button type="submit" class="chat-send">送る</button>
     </form>
     <p class="chat-meta">この書類で AI を使える残りの回数：<span class="chat-remaining">{{ chat_remaining }}</span>回</p>
   </div>

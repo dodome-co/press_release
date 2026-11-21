@@ -19,6 +19,10 @@
   --warn-line: #e3c56b;
   --radius: 8px;
   --shadow: 0 1px 3px rgba(86, 105, 0, 0.14);
+  --chat-bg: #fff4d9;        /* チャットの背景（クリーム色） */
+  --chat-bar: #ffe9b0;       /* チャットの入力欄のまわり */
+  --chat-orange: #eeb15a;    /* 吹き出しの枠 */
+  --chat-mine: #fdd9a0;      /* 自分の吹き出し */
 }
 
 * { box-sizing: border-box; }
@@ -262,13 +266,13 @@ hr { border: 0; border-top: 1px solid var(--primary-line); margin: 24px 0; }
 }
 
 /* ---- 印刷 ---- */
-/* AI とのチャット（書類の入力画面）。チャットアプリのように、吹き出しと、下の入力欄 */
+/* AI とのチャット（書類の入力画面）。LINE のように、AI は左（丸いアイコン付き）、自分は右。下に入力欄 */
 .chat { margin: 1.5rem 0; }
 .chat-window {
   display: flex;
   flex-direction: column;
-  background: var(--primary-soft);
-  border: 1px solid var(--primary-line);
+  background: var(--chat-bg);
+  border: 1px solid var(--chat-orange);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -276,47 +280,71 @@ hr { border: 0; border-top: 1px solid var(--primary-line); margin: 24px 0; }
 .chat-log {
   list-style: none;
   margin: 0;
-  padding: 1rem;
-  height: 26rem;
-  max-height: 60vh;
+  padding: 1rem 0.8rem;
+  height: 28rem;
+  max-height: 62vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.9rem;
 }
-.chat-log li {
-  max-width: 82%;
-  padding: 0.6rem 0.9rem;
-  border-radius: 1.1rem;
+.chat-log > li { display: flex; align-items: flex-start; gap: 0.5rem; }
+.chat-log > .chat-client { justify-content: flex-end; }
+.chat-avatar { width: 40px; height: 40px; border-radius: 50%; flex: none; background: var(--white); border: 1px solid var(--chat-orange); object-fit: cover; }
+.chat-body { display: flex; align-items: flex-end; gap: 0.35rem; max-width: 82%; }
+.chat-bubble {
+  position: relative;
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.6rem;
+  border: 1.5px solid var(--chat-orange);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.6;
 }
-.chat-log .chat-ai {
-  align-self: flex-start;
-  background: var(--white);
-  border: 1px solid var(--primary-line);
-  border-bottom-left-radius: 0.3rem;
-}
-.chat-log .chat-client {
-  align-self: flex-end;
-  background: var(--primary);
-  color: var(--white);
-  border-bottom-right-radius: 0.3rem;
-}
+.chat-ai .chat-bubble { background: var(--white); }
+.chat-client .chat-bubble { background: var(--chat-mine); }
+/* 吹き出しのしっぽ */
+.chat-bubble::before, .chat-bubble::after { content: ""; position: absolute; top: 0.7rem; border: 7px solid transparent; }
+.chat-ai .chat-bubble::before { left: -15px; border-right-color: var(--chat-orange); }
+.chat-ai .chat-bubble::after { left: -12.5px; border-right-color: var(--white); }
+.chat-client .chat-bubble::before { right: -15px; border-left-color: var(--chat-orange); }
+.chat-client .chat-bubble::after { right: -12.5px; border-left-color: var(--chat-mine); }
+.chat-time, .chat-read { flex: none; color: var(--muted); font-size: 0.72rem; line-height: 1.3; }
+.chat-read { text-align: right; }
 .chat-status { color: var(--muted); min-height: 1.4em; margin: 0; padding: 0 1rem; font-size: 0.9rem; }
 .chat-form {
   display: flex;
   gap: 0.5rem;
   align-items: flex-end;
   padding: 0.6rem;
-  background: var(--white);
-  border-top: 1px solid var(--primary-line);
+  background: var(--chat-bar);
+  border-top: 1px solid var(--chat-orange);
 }
-.chat-form textarea { flex: 1; resize: none; margin: 0; }
+.chat-form textarea { flex: 1; resize: none; margin: 0; border-radius: 1.2rem; padding: 0.55rem 0.9rem; }
 .chat-form button { margin: 0; white-space: nowrap; }
-.chat-meta { margin: 0; padding: 0.3rem 1rem 0.5rem; background: var(--white); color: var(--muted); font-size: 0.85rem; }
-.chat-log-readonly { height: auto; max-height: 24rem; background: var(--primary-soft); border: 1px solid var(--primary-line); border-radius: var(--radius); }
+.chat-mic {
+  flex: none;
+  width: 2.6rem;
+  height: 2.6rem;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--primary);
+  border: 1.5px solid var(--chat-orange);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.chat-mic[hidden] { display: none; }
+.chat-mic.is-listening { background: var(--error); color: var(--white); border-color: var(--error); animation: chat-pulse 1.2s infinite; }
+.chat-mic:disabled { opacity: 0.45; cursor: not-allowed; }
+@keyframes chat-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(164, 38, 44, 0.45); } 50% { box-shadow: 0 0 0 8px rgba(164, 38, 44, 0); } }
+.chat-meta { margin: 0; padding: 0.3rem 1rem 0.5rem; background: var(--chat-bar); color: var(--muted); font-size: 0.85rem; }
+.save-note { margin-left: 0.5rem; color: var(--error); font-size: 0.8rem; }
+.chat-log-readonly { height: auto; max-height: 24rem; background: var(--chat-bg); border: 1px solid var(--chat-orange); border-radius: var(--radius); margin: 0 0 1rem; padding: 1rem 1.4rem; list-style: none; display: flex; flex-direction: column; gap: 0.9rem; overflow-y: auto; }
+.chat-log-readonly > li { display: flex; align-items: flex-start; gap: 0.5rem; }
+.chat-log-readonly > .chat-client { justify-content: flex-end; }
 .notice { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--radius); padding: 0.6rem 0.9rem; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .field-hint { color: var(--muted); font-size: 0.9rem; margin-top: -0.25rem; }

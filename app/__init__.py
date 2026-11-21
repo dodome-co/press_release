@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -112,6 +113,15 @@ def create_app(config_name: str | None = None) -> Flask:
     PROGRESS_LABELS = {"received": "受付", "in_progress": "着手", "delivered": "納品済み"}
     app.jinja_env.filters["order_status_label"] = lambda v: ORDER_STATUS_LABELS.get(v, v or "")
     app.jinja_env.filters["progress_label"] = lambda v: PROGRESS_LABELS.get(v, v or "—")
+    def _clock(value):
+        """UTC の日時を、日本時間の「午後5:36」の形にする（チャットの時刻）。"""
+        if not value:
+            return ""
+        jst = value + timedelta(hours=9)
+        hour12 = jst.hour % 12 or 12
+        return f"{'午前' if jst.hour < 12 else '午後'}{hour12}:{jst.minute:02d}"
+
+    app.jinja_env.filters["clock"] = _clock
     app.jinja_env.filters["dt"] = lambda v: v.strftime("%Y-%m-%d %H:%M") if v else ""
     app.jinja_env.filters["yen"] = lambda n: f"{n:,}円"
     app.jinja_env.filters["status_label"] = lambda status: STATUS_LABELS.get(status, status)
