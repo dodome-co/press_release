@@ -293,3 +293,71 @@ def test_interview_connection_error(app, ai_on, monkeypatch):
     _fake_client(monkeypatch, error=anthropic.APIConnectionError(request=request))
     with app.test_request_context(), pytest.raises(ai.AIError, match="つながりません"):
         ai.interview({}, [("client", "x")])
+
+
+# ---- 取材の日時の確認（よいプレスリリースの定義 7章・9章） ----
+from datetime import date, time  # noqa: E402
+
+from app.releases import chat as chat_service  # noqa: E402
+
+
+@pytest.mark.parametrize("day, start, expected", [
+    (date(2026, 12, 4), time(13, 0), ()),  # 金曜日・午後1時：確認しない
+    (date(2026, 12, 4), time(14, 0), ()),  # 午後2時ちょうどは、よい
+    (date(2026, 12, 5), time(10, 0), (chat_service.WEEKEND_CHECK,)),  # 土曜日
+    (date(2026, 12, 6), time(10, 0), (chat_service.WEEKEND_CHECK,)),  # 日曜日
+    (date(2026, 12, 4), time(15, 0), ("午前中か午後2時までの方が好まれますが、どうしますか",)),
+    (date(2026, 12, 5), time(15, 0), (chat_service.WEEKEND_CHECK, "午前中か午後2時までの方が好まれますが、どうしますか")),
+    (None, None, ()),  # まだ入力されていなければ、確認しない
+])
+def test_date_checks(app, draft, day, start, expected):
+    draft.event_date, draft.event_start_time = day, start
+    assert chat_service.date_checks(draft) == expected
+
+
+def test_latest_start_is_a_setting(app, draft):
+    app.config["RECOMMENDED_LATEST_START"] = "13:30"
+    draft.event_date, draft.event_start_time = date(2026, 12, 4), time(14, 0)
+    assert chat_service.date_checks(draft) == ("午前中か午後1時30分までの方が好まれますが、どうしますか",)
+
+
+def test_date_check_is_asked_by_the_app_without_ai(logged_in, draft, fake_ai):
+    draft.event_date, draft.event_start_time = date(2026, 12, 5), time(15, 0)  # 土曜日・午後3時
+    db.session.commit()
+    first = _send(logged_in, draft, "新しいようかんです").get_json()
+    assert first["reply"] == ("取材の日時（2026年12月5日（土） 15:00〜）について、確認させてください。"
+                              "平日の方が好まれますが、どうしますか")
+    assert not fake_ai.calls  # AI は呼ばない（料金がかからない）
+    second = _send(logged_in, draft, "土曜日しかできません").get_json()
+    assert second["reply"].endswith("午前中か午後2時までの方が好まれますが、どうしますか") and not fake_ai.calls
+    third = _send(logged_in, draft, "時間はこのままで").get_json()
+    assert third["reply"] == "当日は、何を見られますか？" and len(fake_ai.calls) == 1
+    # AI には、確認の質問と答えも、やりとりとして渡る
+    assert ("ai", first["reply"]) in fake_ai.calls[0]["history"]
+    assert ("client", "土曜日しかできません") in fake_ai.calls[0]["history"]
+    assert AIChatMessage.query.filter_by(release_id=draft.id).count() == 6
+
+
+def test_weekday_morning_goes_straight_to_ai(logged_in, draft, fake_ai):
+    draft.event_date, draft.event_start_time = date(2026, 12, 4), time(10, 0)
+    db.session.commit()
+    _send(logged_in, draft)
+    assert len(fake_ai.calls) == 1
+
+
+def test_edit_page_recommends_weekday_morning(logged_in, draft):
+    body = logged_in.get(f"/releases/{draft.id}/edit").get_data(as_text=True)
+    assert "取材は平日の、午前中か午後2時までがおすすめです。" in body
+
+
+def test_system_prompt_follows_the_definition_without_internal_reasons(app, ai_on, monkeypatch):
+    """定義（第2版）の、クライアントに見せてよい内容だけを、AI に伝える。社外秘の理由は入れない。"""
+    sent = _fake_client(monkeypatch, _response(GOOD))
+    with app.test_request_context():
+        ai.interview({}, [("client", "x")])
+    system = sent.kwargs["system"]
+    for expected in ("地域における意義", "何につながるか", "取材に答えられる人", "撮れる場面", "一般の参加者がいる回",
+                     "内覧会", "締結式", "取材の申し込み"):
+        assert expected in system, expected
+    for secret in ("政党", "締め切り", "テレビ", "記者が少ない"):
+        assert secret not in system, secret

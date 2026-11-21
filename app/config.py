@@ -69,6 +69,8 @@ class Config:
     AI_TIMEOUT_SECONDS = int(os.environ.get("AI_TIMEOUT_SECONDS", "45"))
     # 1つの書類で、AI を呼べる回数（料金の使いすぎを防ぐ）
     AI_MAX_CALLS_PER_RELEASE = int(os.environ.get("AI_MAX_CALLS_PER_RELEASE", "30"))
+    # 取材に好まれる開始時刻の、いちばん遅い時刻（これより遅いと、AI が確認する）。曜日は、平日を勧める
+    RECOMMENDED_LATEST_START = os.environ.get("RECOMMENDED_LATEST_START", "14:00")
 
     # 回数制限（app/ratelimit.py）。ログイン失敗・会員登録・パスワード再設定の依頼・申込みの連打を止める
     RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "1") == "1"

@@ -5,6 +5,8 @@ AI を呼んでいる間（数秒）は、書類の行をロックしない。�
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from flask import current_app
 
 from .. import ai
@@ -44,6 +46,40 @@ def _context(release: Release) -> dict:
     }
 
 
+WEEKEND_CHECK = "平日の方が好まれますが、どうしますか"
+
+
+def _latest_start():
+    return datetime.strptime(current_app.config["RECOMMENDED_LATEST_START"], "%H:%M").time()
+
+
+def latest_start_label() -> str:
+    """設定の時刻（例：14:00）を、画面に出す言い方（例：午後2時）にする。"""
+    t = _latest_start()
+    hour = f"午後{t.hour - 12}時" if t.hour > 12 else f"{t.hour}時"
+    return hour + (f"{t.minute}分" if t.minute else "")
+
+
+def late_check() -> str:
+    return f"午前中か{latest_start_label()}までの方が好まれますが、どうしますか"
+
+
+def date_checks(release: Release) -> tuple[str, ...]:
+    """取材の日時が、記者に好まれる日時（平日、午後2時まで）から外れていれば、AI に聞いてもらう確認の文。"""
+    checks = []
+    if release.event_date and release.event_date.weekday() >= 5:  # 5=土曜日、6=日曜日
+        checks.append(WEEKEND_CHECK)
+    if release.event_start_time and release.event_start_time > _latest_start():
+        checks.append(late_check())
+    return tuple(checks)
+
+
+def pending_date_check(release: Release) -> str | None:
+    """まだ聞いていない、日時の確認の文（なければ None）。"""
+    asked = " ".join(m.content for m in release.chat_messages if m.role == CHAT_ROLE_AI)
+    return next((c for c in date_checks(release) if c not in asked), None)
+
+
 def _fit(text: str) -> str:
     """入力欄の上限（500文字）に収める。"""
     return text[: current_app.config["INPUT_MAX_LENGTH"]]
@@ -63,13 +99,21 @@ def send(release: Release, text: str, input_method: str = CHAT_INPUT_TEXT) -> di
     if remaining_calls(release) <= 0:
         raise ChatError("この書類で AI を使える回数の上限に達しました。運営者にご相談ください。", 429)
 
-    history = [(m.role, m.content) for m in release.chat_messages] + [(CHAT_ROLE_CLIENT, text)]
-    try:
-        result = ai.interview(_context(release), history)
-    except ai.AIError as e:
-        raise ChatError(str(e), 503) from e
-    if not result.reply:
-        raise ChatError("AI の返事が空でした。もう一度送ってください。", 503)
+    pending = pending_date_check(release)
+    if pending:
+        # 取材の日時の確認は、AI に任せず、決まった文で、1回に1つずつ聞く（AI を呼ばないので、料金もかからない）
+        result = ai.InterviewResult(
+            reply=f"取材の日時（{release.event_at_display}）について、確認させてください。{pending}",
+            complete=False, service="", what="", why="", message="",
+        )
+    else:
+        history = [(m.role, m.content) for m in release.chat_messages] + [(CHAT_ROLE_CLIENT, text)]
+        try:
+            result = ai.interview(_context(release), history)
+        except ai.AIError as e:
+            raise ChatError(str(e), 503) from e
+        if not result.reply:
+            raise ChatError("AI の返事が空でした。もう一度送ってください。", 503)
 
     try:
         service._lock_editable(release)  # AI を呼んでいる間に、提出などで状態が変わっていないか

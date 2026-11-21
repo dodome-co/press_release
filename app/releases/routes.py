@@ -79,6 +79,7 @@ def edit(release_id):
         ai_ready=ai.is_configured(),
         first_question=ai.FIRST_QUESTION,
         chat_remaining=chat.remaining_calls(release),
+        latest_start_label=chat.latest_start_label(),
     )
 
 
