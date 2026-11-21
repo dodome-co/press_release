@@ -346,6 +346,10 @@ hr { border: 0; border-top: 1px solid var(--primary-line); margin: 24px 0; }
 .chat-log-readonly > li { display: flex; align-items: flex-start; gap: 0.5rem; }
 .chat-log-readonly > .chat-client { justify-content: flex-end; }
 .notice { background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: var(--radius); padding: 0.6rem 0.9rem; }
+.title-options { padding-left: 1.4rem; }
+.title-options li { margin: 0 0 0.8rem; }
+button.secondary { background: var(--white); color: var(--primary); border: 1px solid var(--primary); }
+button.secondary:hover { background: var(--primary-soft); color: var(--primary-dark); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .field-hint { color: var(--muted); font-size: 0.9rem; margin-top: -0.25rem; }
 

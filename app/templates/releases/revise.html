@@ -8,7 +8,7 @@
 
 <form method="post" novalidate>
   {{ form.hidden_tag() }}
-  {{ field(form.title, placeholder="全角22文字以内") }}
+  {{ field(form.title, placeholder="短めに") }}
   {{ field(form.subtitle) }}
   {{ field(form.summary, rows=8) }}
   {{ field(form.event_date) }}
@@ -16,6 +16,7 @@
   {{ field(form.event_end_time) }}
   {{ field(form.location) }}
   {{ field(form.speakers, rows=3) }}
+  {{ field(form.features_heading) }}
   {{ field(form.feature_1) }}
   {{ field(form.feature_2) }}
   {{ field(form.feature_3) }}

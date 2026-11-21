@@ -35,18 +35,31 @@
   <p>伝えたいこと：<br><span style="white-space:pre-wrap">{{ release.source_message }}</span></p>
 </details>
 
+{% if editable and release.title_options %}
+<h2>AI の案（タイトル＋サブタイトルの3セット）</h2>
+<p>1セットを選んで「この案を使う」を押すと、下のタイトルとサブタイトルに入ります（そのあと、直せます）。いま下のフォームに、まだ保存していない変更があるときは、先に保存してください。</p>
+<ol class="title-options">
+  {% for o in release.title_options %}
+  <li>
+    <strong>{{ o.title }}</strong><br>
+    <span class="field-hint">{{ o.subtitle }}</span>
+    <form action="{{ url_for('admin.apply_title_option', release_id=release.id, index=loop.index0) }}" method="post" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="secondary">この案を使う</button>
+    </form>
+  </li>
+  {% endfor %}
+</ol>
+{% endif %}
+
 {% if editable %}
 <form method="post" novalidate>
   {{ form.hidden_tag() }}
-  <h2>タイトル（管理者が決める）</h2>
-  {% if release.title_candidate_list %}
-  <p>AI の案：</p>
-  <ul>{% for t in release.title_candidate_list %}<li>{{ t }}（{{ t|length }}文字）</li>{% endfor %}</ul>
-  <p>案を選ぶか、自分で考えて、下の欄に入れてください（全角22文字以内）。</p>
-  {% endif %}
-  {{ field(form.title, list="title-candidates", placeholder="全角22文字以内") }}
-  <datalist id="title-candidates">{% for t in release.title_candidate_list %}<option value="{{ t }}">{% endfor %}</datalist>
+  <h2>タイトルとサブタイトル（管理者が決める）</h2>
+  <p>タイトルは、短めに。字数の上限は、ありません。</p>
+  {{ field(form.title, placeholder="短めに") }}
   {{ field(form.subtitle) }}
+  <button type="submit">保存する</button>
 
   <h2>要旨（前文）</h2>
   <p>空のままでは承認できません。</p>
@@ -58,6 +71,7 @@
   {{ field(form.event_end_time) }}
   {{ field(form.location) }}
   {{ field(form.speakers, rows=3) }}
+  {{ field(form.features_heading) }}
   {{ field(form.feature_1) }}
   {{ field(form.feature_2) }}
   {{ field(form.feature_3) }}
@@ -106,7 +120,7 @@
   <li>日時：{{ release.event_at_display }}</li><li>会場：{{ release.location }}</li>
   {% if release.speaker_list %}<li>当日の対応者：{{ release.speaker_list|join('、') }}</li>{% endif %}
 </ul>
-{% if release.features %}<ul>{% for f in release.features %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
+{% if release.features %}<h3>{{ release.features_heading_text }}</h3><ul>{% for f in release.features %}<li>{{ f }}</li>{% endfor %}</ul>{% endif %}
 {% for photo in release.photos %}
   <img src="{{ url_for('files.photo', photo_id=photo.id) }}" alt="{{ photo.original_filename }}" style="max-width:240px">
 {% endfor %}

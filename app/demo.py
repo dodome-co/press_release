@@ -5,6 +5,7 @@
 始まる注文だけ、デモ環境で、返金を模擬する（app/payments.py）。
 """
 import io
+import json
 import os
 from datetime import date, datetime, time, timedelta
 
@@ -170,7 +171,12 @@ def _release(user: User, admin: User, *, approved: bool, title: str, days_ago: i
         ),
         subtitle="地元の栗と米粉で、新しい和菓子のシリーズ。試食会を報道公開",
         speakers=f"{user.company_name}　代表取締役社長　岩手　盛子\n栗生産者　花巻　賢治",
-        title_candidates="\n".join((title, "いわて栗ようかん、地元素材で新登場", "地元の栗を生かした新菓子を発売")),
+        title_candidates=json.dumps([
+            {"title": title, "subtitle": "地元の栗と米粉で、新しい和菓子のシリーズ。試食会を報道公開"},
+            {"title": "いわて栗ようかん、地元素材で新登場", "subtitle": "出荷できなかった栗を、地域の農家と連携して生かす"},
+            {"title": "地元の栗を生かした新菓子を発売", "subtitle": "12月5日に試食会。生産者も出席"},
+        ], ensure_ascii=False),
+        features_heading="商品の特徴",
         summary_source="ai_assisted",
         status="pending",
         first_submitted_at=submitted,

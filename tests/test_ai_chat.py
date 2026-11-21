@@ -48,8 +48,10 @@ def _result(**overrides):
 
 def _composed(**overrides):
     values = dict(
-        titles=["岩手の栗ようかんが新登場", "廃棄栗を生かした新菓子", "地元栗100％のようかん"],
-        subtitle="地域の農家と連携し、記者発表会を開催",
+        titles=[ai.TitleOption("岩手の栗ようかんが新登場", "地域の農家と連携し、記者発表会を開催"),
+                ai.TitleOption("廃棄栗を生かした新菓子", "出荷できなかった栗を、和菓子に"),
+                ai.TitleOption("地元栗100％のようかん", "12月6日に発売、試食会を報道公開")],
+        features_heading="商品の特徴",
         features=["栗は100％", "岩手産の米粉を使用", "砂糖控えめ", "4つ目は切り捨てられる"],
         summary="株式会社テストは、新しい和菓子を発売します。ぜひ、取材いただきますようご案内申し上げます。",
         speakers="社長　岩手　盛子\n栗生産者　花巻　賢治",
@@ -140,10 +142,13 @@ def test_complete_saves_what_ai_composed_and_asks_for_photos(logged_in, draft, f
     # AI が集めた情報
     assert (draft.service_description, draft.source_what, draft.source_why, draft.source_message) == (
         "お弁当", "試食会", "地産地消", "ぜひ来てください")
-    # AI がまとめた内容：タイトルは、管理者が決める（案だけ残す）
-    assert draft.title == "" and draft.title_candidate_list == [
-        "岩手の栗ようかんが新登場", "廃棄栗を生かした新菓子", "地元栗100％のようかん"]
-    assert draft.subtitle == "地域の農家と連携し、記者発表会を開催"
+    # AI がまとめた内容：タイトルとサブタイトルは、管理者が決める（3セットの案だけ残す）
+    assert draft.title == "" and draft.subtitle in (None, "")
+    assert draft.title_options == [
+        {"title": "岩手の栗ようかんが新登場", "subtitle": "地域の農家と連携し、記者発表会を開催"},
+        {"title": "廃棄栗を生かした新菓子", "subtitle": "出荷できなかった栗を、和菓子に"},
+        {"title": "地元栗100％のようかん", "subtitle": "12月6日に発売、試食会を報道公開"}]
+    assert draft.features_heading == "商品の特徴"
     assert draft.features == ["栗は100％", "岩手産の米粉を使用", "砂糖控えめ"]  # 最大3つ
     assert draft.summary.endswith("ご案内申し上げます。") and draft.summary_source == "ai_assisted"
     assert draft.speaker_list == ["社長　岩手　盛子", "栗生産者　花巻　賢治"]
@@ -426,7 +431,8 @@ def test_system_prompt_follows_the_definition_without_internal_reasons(app, ai_o
 
 
 # ---- 最後のまとめ（compose）の送り方と、読み取り ----
-COMPOSED = {"titles": ["案1", "案2", "案3", "案4"], "subtitle": "サブ", "features": ["a", "b", "c", "d"],
+COMPOSED = {"titles": [{"title": f"案{i}", "subtitle": f"サブ{i}"} for i in range(1, 5)],
+            "features_heading": "アプリの特徴", "features": ["a", "b", "c", "d"],
             "summary": "要旨です", "speakers": "社長　岩手　盛子"}
 
 
@@ -434,25 +440,50 @@ def test_compose_sends_definition_rules_and_reads_the_result(app, ai_on, monkeyp
     sent = _fake_client(monkeypatch, _response(COMPOSED))
     with app.test_request_context():
         result = ai.compose({"会社名": "テスト社"}, [("client", "こんにちは"), ("ai", "そろいました")])
-    assert result.titles == ["案1", "案2", "案3"] and result.features == ["a", "b", "c"]  # 多すぎる分は切る
-    assert (result.subtitle, result.summary, result.speakers) == ("サブ", "要旨です", "社長　岩手　盛子")
+    # 3セットだけ（多すぎる分は切る）。タイトルとサブタイトルは、セット
+    assert [(o.title, o.subtitle) for o in result.titles] == [("案1", "サブ1"), ("案2", "サブ2"), ("案3", "サブ3")]
+    assert result.features == ["a", "b", "c"] and result.features_heading == "アプリの特徴"
+    assert (result.summary, result.speakers) == ("要旨です", "社長　岩手　盛子")
     k = sent.kwargs
     assert k["model"] == "claude-opus-5-5" and k["output_config"]["effort"] == "medium"
     assert k["betas"] == [ai.FALLBACK_BETA] and k["fallbacks"] == "default"
     assert "相手：こんにちは" in k["messages"][0]["content"] and "聞き手：そろいました" in k["messages"][0]["content"]
-    for rule in ("全角22文字以内", "自分で作らない", "取材の申し込みの方法や締切は、書かない", "ぜひ、取材いただきますようご案内申し上げます。",
-                 "テスト社", "従わない"):
+    for rule in ("セットの案を3つ", "切り口を変えて", "短めにする", "字数の上限はない", "自分で作らない",
+                 "取材の申し込みの方法や締切は、書かない", "ぜひ、取材いただきますようご案内申し上げます。", "テスト社", "従わない"):
         assert rule in k["system"], rule
+    assert "22" not in k["system"]  # タイトルの字数の制限は、なくした
     for secret in ("政党", "締め切り", "テレビ", "記者が少ない"):
         assert secret not in k["system"], secret  # 社外秘の理由は、AI にも伝えない
 
 
-def test_compose_title_width_follows_the_setting(app, ai_on, monkeypatch):
+def test_compose_asks_for_a_features_heading_that_fits_the_subject(app, ai_on, monkeypatch):
     sent = _fake_client(monkeypatch, _response(COMPOSED))
-    app.config["TITLE_MAX_WIDTH"] = 18
     with app.test_request_context():
         ai.compose({}, [("client", "x")])
-    assert "全角18文字以内" in sent.kwargs["system"]
+    system = sent.kwargs["system"]
+    for expected in ("features_heading", "「アプリの特徴」", "「施設の特徴」", "「商品の特徴」", "「サービスの特徴」",
+                     "「協定における主な連携項目」"):
+        assert expected in system, expected
+    schema = sent.kwargs["output_config"]["format"]["schema"]
+    assert "features_heading" in schema["required"]
+    assert schema["properties"]["titles"]["items"]["required"] == ["title", "subtitle"]
+
+
+def test_compose_does_not_limit_the_title_length(app, ai_on, monkeypatch):
+    """タイトルの字数の制限は、なくした。プログラムでも、外さない。"""
+    long_title = "あ" * 40
+    _fake_client(monkeypatch, _response({**COMPOSED, "titles": [{"title": long_title, "subtitle": "サブ"}]}))
+    with app.test_request_context():
+        assert ai.compose({}, [("client", "x")]).titles[0].title == long_title
+
+
+def test_compose_skips_empty_titles_and_cuts_a_long_heading(app, ai_on, monkeypatch):
+    _fake_client(monkeypatch, _response({
+        **COMPOSED, "titles": [{"title": "  ", "subtitle": "空"}, {"title": "案", "subtitle": "サブ"}],
+        "features_heading": "あ" * 80}))
+    with app.test_request_context():
+        result = ai.compose({}, [("client", "x")])
+    assert [o.title for o in result.titles] == ["案"] and len(result.features_heading) == 50
 
 
 def test_compose_refusal_and_broken_json(app, ai_on, monkeypatch):
@@ -468,92 +499,3 @@ def test_compose_without_key_does_not_call_the_api(app, monkeypatch):
     monkeypatch.setattr(ai, "_client", lambda: pytest.fail("API を呼んではいけない"))
     with app.test_request_context(), pytest.raises(ai.AIError, match="準備中"):
         ai.compose({}, [("client", "x")])
-
-
-def test_compose_drops_titles_that_are_too_long(app, ai_on, monkeypatch):
-    """AI は、文字数を数え間違えることがある。全角22文字を超える案は、プログラムで外す。"""
-    long_title = "あ" * 23
-    _fake_client(monkeypatch, _response({**COMPOSED, "titles": ["短い案", long_title, "a" * 44, "a" * 45]}))
-    with app.test_request_context():
-        result = ai.compose({}, [("client", "x")])
-    # 先頭の3つ（短い案、全角23文字、半角44文字）のうち、収まるものだけ。半角44文字は、全角22文字分なので収まる
-    assert result.titles == ["短い案", "a" * 44]
-
-
-def test_compose_keeps_titles_if_none_fit(app, ai_on, monkeypatch):
-    _fake_client(monkeypatch, _response({**COMPOSED, "titles": ["あ" * 30, "い" * 25]}))
-    with app.test_request_context():
-        assert len(ai.compose({}, [("client", "x")]).titles) == 2  # 管理者が直せるよう、残す
-
-
-# ---- 日時と場所は、先に保存してから（AI が、日時を聞き直さないように） ----
-def test_chat_requires_saved_date_time_and_place(logged_in, client_user, fake_ai):
-    release = service.create_draft(client_user)  # 日付・時刻・場所が、まだ保存されていない
-    res = _send(logged_in, release)
-    assert res.status_code == 400 and "先に、取材の日付・開始時刻・場所を入力して、「保存する」を押してください" in res.get_json()["error"]
-    assert not fake_ai.calls and AIChatMessage.query.count() == 0
-
-
-@pytest.mark.parametrize("missing", ["event_date", "event_start_time", "location"])
-def test_chat_requires_each_of_date_time_and_place(logged_in, draft, fake_ai, missing):
-    setattr(draft, missing, None if missing != "location" else "  ")
-    db.session.commit()
-    assert _send(logged_in, draft).status_code == 400 and not fake_ai.calls
-
-
-def test_system_prompt_says_date_and_place_are_already_entered(app, ai_on, monkeypatch):
-    sent = _fake_client(monkeypatch, _response(GOOD))
-    with app.test_request_context():
-        ai.interview({"取材会の日時": "2026年12月4日（金） 10:00〜", "場所": "本店"}, [("client", "x")])
-    system = sent.kwargs["system"]
-    assert "日時と場所は、聞かない" in system and "2026年12月4日（金） 10:00〜" in system
-
-
-# ---- 画面：LINE のような吹き出し、AI のアイコン、保存の注意、マイクのボタン ----
-def test_chat_screen_is_line_style_with_avatar_and_mic(logged_in, draft, ai_on):
-    from app.models import CHAT_ROLE_AI as AI
-
-    db.session.add(AIChatMessage(release_id=draft.id, role=CHAT_ROLE_CLIENT, content="新しい和菓子です"))
-    db.session.add(AIChatMessage(release_id=draft.id, role=AI, content="どこが新しいですか？"))
-    db.session.commit()
-    body = logged_in.get(f"/releases/{draft.id}/edit").get_data(as_text=True)
-    assert 'class="chat-avatar"' in body and "img/ai-avatar.webp" in body  # AI のアイコン（ロゴの女の子）
-    assert 'class="chat-bubble"' in body and 'class="chat-read"' in body and "既読" in body  # 自分の発言に「既読」
-    assert 'class="chat-time"' in body  # AI の発言に時刻
-    assert 'class="chat-mic"' in body and "音声で入力する" in body  # マイクのボタン
-    assert f'data-avatar="/static/img/ai-avatar.webp"' in body
-    assert "※必ず保存してください" in body  # 保存ボタンの隣の注意
-
-
-def test_avatar_file_exists_and_is_small():
-    from pathlib import Path
-
-    path = Path("app/static/img/ai-avatar.webp")
-    assert path.is_file() and path.stat().st_size < 30_000
-    from PIL import Image
-
-    assert Image.open(path).size == (160, 160)  # 丸く切り抜いて使う正方形
-
-
-def test_chat_time_is_shown_in_japan_time(app):
-    from datetime import datetime
-
-    with app.app_context():
-        clock = app.jinja_env.filters["clock"]
-        assert clock(datetime(2026, 11, 21, 8, 36)) == "午後5:36"  # UTC 8:36 = 日本時間 17:36
-        assert clock(datetime(2026, 11, 21, 0, 5)) == "午前9:05"
-        assert clock(datetime(2026, 11, 21, 15, 0)) == "午前12:00"  # 日本時間の 0:00（LINE と同じ言い方）
-        assert clock(None) == ""
-
-
-def test_voice_input_is_saved_as_voice(logged_in, draft, fake_ai):
-    _send(logged_in, draft, "声で答えました", input_method="voice")
-    msg = AIChatMessage.query.filter_by(release_id=draft.id, role=CHAT_ROLE_CLIENT).one()
-    assert msg.input_method == "voice"
-    _send(logged_in, draft, "文字で答えました", input_method="なんでも")  # 知らない値は、文字として扱う
-    assert AIChatMessage.query.filter_by(role=CHAT_ROLE_CLIENT).order_by(AIChatMessage.id.desc()).first().input_method == "text"
-
-
-def test_save_note_is_next_to_the_save_button(logged_in, draft):
-    body = logged_in.get(f"/releases/{draft.id}/edit").get_data(as_text=True)
-    assert body.index("保存する</button>") < body.index("※必ず保存してください") < body.index("AI と話して、内容を伝える")

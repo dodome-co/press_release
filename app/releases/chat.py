@@ -5,6 +5,7 @@ AI を呼んでいる間（数秒）は、書類の行をロックしない。�
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime
 
 from flask import current_app
@@ -152,8 +153,11 @@ def send(release: Release, text: str, input_method: str = CHAT_INPUT_TEXT) -> di
         release.source_what = _fit(result.what)
         release.source_why = _fit(result.why)
         release.source_message = _fit(result.message)
-        release.title_candidates = "\n".join(composed.titles)
-        release.subtitle = composed.subtitle
+        # タイトルとサブタイトルのセットの案は、管理者が選ぶ。それまでは、タイトルもサブタイトルも、空のまま
+        release.title_candidates = json.dumps(
+            [{"title": o.title, "subtitle": o.subtitle} for o in composed.titles], ensure_ascii=False
+        )
+        release.features_heading = composed.features_heading
         release.summary = composed.summary
         release.summary_source = SUMMARY_AI_ASSISTED
         release.speakers = composed.speakers

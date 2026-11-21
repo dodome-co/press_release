@@ -41,7 +41,7 @@
 {% endif %}
 
 {% if release.features %}
-<h3>特徴</h3>
+<h3>{{ release.features_heading_text }}</h3>
 <ul>{% for f in release.features %}<li>{{ f }}</li>{% endfor %}</ul>
 {% endif %}
 

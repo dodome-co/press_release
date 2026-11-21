@@ -132,7 +132,7 @@ def _story(release: Release, scale: float):
     features = release.features
     feature_cells = []
     if features:
-        feature_cells.append(Paragraph("◆ 商品の特徴", heading))
+        feature_cells.append(Paragraph(_text(f"◆ {release.features_heading_text}"), heading))
         feature_cells += [Paragraph(_text(f"・{f}"), style(f"f{i}", 10.5, after=1)) for i, f in enumerate(features)]
     if photos:
         photo_cells = []

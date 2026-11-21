@@ -1,4 +1,5 @@
 import io
+import json
 from unittest.mock import patch
 
 import pytest
@@ -44,7 +45,7 @@ def pending(client_user):
 def _edit_data(**overrides):
     data = {**form_data({k: FULL[k] for k in ("title", "event_date", "event_start_time", "event_end_time", "location",
                                               "feature_1", "feature_2", "feature_3")}),
-            "subtitle": "", "speakers": "", "summary": "管理者が書いた要旨です。"}
+            "subtitle": "", "speakers": "", "features_heading": "", "summary": "管理者が書いた要旨です。"}
     data.update(overrides)
     return data
 
@@ -115,22 +116,94 @@ def test_admin_form_has_no_schedule_or_application(admin_client, pending):
     body = admin_client.get(f"/admin/releases/{pending.id}").get_data(as_text=True)
     for gone in ("schedule_time_1", "application_method", "service_description", "取材の申込方法"):
         assert gone not in body, gone
-    for expected in ('name="subtitle"', 'name="speakers"', 'name="title"', "title-candidates"):
+    for expected in ('name="subtitle"', 'name="speakers"', 'name="title"', 'name="features_heading"'):
         assert expected in body, expected
+    assert "全角22文字" not in body and "title-candidates" not in body  # タイトルの字数の制限は、なくした
 
 
-def test_admin_sees_title_candidates_and_chat(admin_client, pending):
+OPTIONS = [{"title": "案その1", "subtitle": "サブその1"}, {"title": "案その2", "subtitle": "サブその2"},
+           {"title": "案その3", "subtitle": "サブその3"}]
+
+
+def _set_options(release):
+    release.title_candidates = json.dumps(OPTIONS, ensure_ascii=False)
+    release.summary_source = "ai_assisted"
+    db.session.commit()
+
+
+def test_admin_sees_three_title_sets_and_the_chat(admin_client, pending):
     from app.models import AIChatMessage
 
-    pending.title_candidates = "案その1\n案その2\n案その3"
-    pending.summary_source = "ai_assisted"
+    _set_options(pending)
     db.session.add(AIChatMessage(release_id=pending.id, role="client", content="新しい和菓子です"))
     db.session.add(AIChatMessage(release_id=pending.id, role="ai", content="どこが新しいですか？"))
     db.session.commit()
     body = admin_client.get(f"/admin/releases/{pending.id}").get_data(as_text=True)
-    for expected in ("案その1", "案その2", "案その3", '<option value="案その2">', "新しい和菓子です", "どこが新しいですか？",
-                     "AI が、クライアントとのチャットから"):
+    for expected in ("AI の案（タイトル＋サブタイトルの3セット）", "案その1", "サブその1", "案その2", "サブその2", "案その3",
+                     "サブその3", "この案を使う", "新しい和菓子です", "どこが新しいですか？", "AI が、クライアントとのチャットから"):
         assert expected in body, expected
+    assert body.count(">この案を使う</button>") == 3  # ボタンは、3つ
+    for i in range(3):
+        assert f"/admin/releases/{pending.id}/title-options/{i}" in body
+
+
+def test_use_this_title_set_fills_title_and_subtitle_together(admin_client, pending, admin_user):
+    _set_options(pending)
+    res = admin_client.post(f"/admin/releases/{pending.id}/title-options/1", follow_redirects=True)
+    assert res.status_code == 200 and "この案を、タイトルとサブタイトルに入れました。" in res.get_data(as_text=True)
+    db.session.refresh(pending)
+    assert (pending.title, pending.subtitle) == ("案その2", "サブその2")
+    assert pending.status == "pending" and pending.last_edited_by == admin_user.id
+    assert {(e.field_name, e.new_value) for e in pending.edits} == {("title", "案その2"), ("subtitle", "サブその2")}
+    body = admin_client.get(f"/admin/releases/{pending.id}").get_data(as_text=True)
+    assert 'value="案その2"' in body and 'value="サブその2"' in body  # フォームに入っている
+
+
+def test_use_title_set_keeps_the_summary_and_can_be_redone(admin_client, pending):
+    _set_options(pending)
+    pending.summary = "書いた要旨"
+    db.session.commit()
+    admin_client.post(f"/admin/releases/{pending.id}/title-options/0")
+    admin_client.post(f"/admin/releases/{pending.id}/title-options/2")
+    db.session.refresh(pending)
+    assert (pending.title, pending.subtitle, pending.summary) == ("案その3", "サブその3", "書いた要旨")
+
+
+@pytest.mark.parametrize("index", [3, 99])
+def test_use_title_set_with_an_unknown_number(admin_client, pending, index):
+    _set_options(pending)
+    res = admin_client.post(f"/admin/releases/{pending.id}/title-options/{index}", follow_redirects=True)
+    assert "その案は、ありません。" in res.get_data(as_text=True)
+    db.session.refresh(pending)
+    assert pending.title == FULL["title"]
+
+
+def test_use_title_set_is_only_for_pending_and_for_admins(admin_client, client, client_user, pending):
+    _set_options(pending)
+    login(client, "client@example.com")
+    assert client.post(f"/admin/releases/{pending.id}/title-options/0").status_code == 403
+    pending.status, pending.approved_at = "approved", utcnow()
+    db.session.commit()
+    res = admin_client.post(f"/admin/releases/{pending.id}/title-options/0", follow_redirects=True)
+    assert "承認待ちの書類だけ" in res.get_data(as_text=True)
+    anonymous = admin_client.application.test_client()
+    assert anonymous.post(f"/admin/releases/{pending.id}/title-options/0").status_code == 302
+
+
+def test_old_candidate_format_is_still_readable(app, pending):
+    pending.title_candidates = "古い案その1\n古い案その2"
+    assert pending.title_options == [{"title": "古い案その1", "subtitle": ""}, {"title": "古い案その2", "subtitle": ""}]
+    pending.title_candidates = "{こわれた"
+    assert pending.title_options == [{"title": "{こわれた", "subtitle": ""}]  # 読めなくても、壊れない
+    pending.title_candidates = None
+    assert pending.title_options == []
+
+
+def test_admin_can_edit_the_features_heading(admin_client, pending):
+    admin_client.post(f"/admin/releases/{pending.id}", data=_edit_data(features_heading="アプリの特徴"))
+    db.session.refresh(pending)
+    assert pending.features_heading == "アプリの特徴"
+    assert [e.field_name for e in pending.edits if e.field_name == "features_heading"] == ["features_heading"]
 
 
 def test_admin_cannot_edit_source_info(admin_client, pending):

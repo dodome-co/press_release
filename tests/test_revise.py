@@ -43,7 +43,7 @@ def _revise_data(release, **overrides):
             "event_date": release.event_date.isoformat(), "event_start_time": release.event_start_time.strftime("%H:%M"),
             "event_end_time": release.event_end_time.strftime("%H:%M") if release.event_end_time else "",
             "location": release.location, "speakers": release.speakers or "",
-            "feature_1": release.feature_1, "feature_2": release.feature_2, "feature_3": release.feature_3}
+            "features_heading": release.features_heading or "", "feature_1": release.feature_1, "feature_2": release.feature_2, "feature_3": release.feature_3}
     data.update(overrides)
     return data
 
@@ -132,11 +132,22 @@ def test_revise_without_changes_does_nothing(me, approved):
     assert path.read_bytes() == before
 
 
-def test_revise_checks_the_title_length(me, approved):
-    res = me.post(f"/releases/{approved.id}/revise", data=_revise_data(approved, title="あ" * 23))
-    assert res.status_code == 200 and "全角22文字以内" in res.get_data(as_text=True)
+def test_revise_has_no_title_length_limit_but_stops_the_absurd(me, approved):
+    long_title = "あ" * 40  # 22文字を超えても、よい（字数の制限は、なくした）
+    assert me.post(f"/releases/{approved.id}/revise", data=_revise_data(approved, title=long_title)).status_code == 302
     db.session.refresh(approved)
-    assert approved.title == FULL_TITLE
+    assert approved.title == long_title
+    res = me.post(f"/releases/{approved.id}/revise", data=_revise_data(approved, title="あ" * 201))  # 保存できる長さ（200）まで
+    assert res.status_code == 200
+    db.session.refresh(approved)
+    assert approved.title == long_title
+
+
+def test_revise_can_change_the_features_heading(me, approved):
+    me.post(f"/releases/{approved.id}/revise", data=_revise_data(approved, features_heading="アプリの特徴"))
+    db.session.refresh(approved)
+    assert approved.features_heading == "アプリの特徴"
+    assert "◆アプリの特徴" in _pdf_text(resolve_path(approved.file_path))
 
 
 def test_revise_rolls_back_when_the_pdf_cannot_be_made(me, approved):

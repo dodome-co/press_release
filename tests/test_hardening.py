@@ -305,17 +305,7 @@ def test_reject_reason_length_limit(app, client_user, admin_user):
     assert release.status == "rejected"
 
 
-# ---- タイトルの長さ（全角22文字以内） ----
-def test_display_width():
-    from app.textutil import display_width
-
-    assert display_width("あいう") == 3
-    assert display_width("ABC") == 1.5  # 半角は0.5
-    assert display_width("Ａ") == 1  # 全角英字は1
-    assert display_width("あA") == 1.5
-    assert display_width(None) == 0
-
-
+# ---- タイトルの長さ（字数の制限はない。保存できるのは200文字まで） ----
 @pytest.fixture()
 def admin_edit(app, client_user, admin_user):
     """管理者の画面で、承認待ちの書類のタイトルを保存する（タイトルは、管理者が決める）。"""
@@ -330,35 +320,23 @@ def admin_edit(app, client_user, admin_user):
     return edit
 
 
-def test_title_of_22_fullwidth_chars_is_accepted(admin_edit):
-    title = "あ" * 22
-    assert admin_edit(title).status_code == 302
+def test_title_length_is_not_limited_to_22_chars(admin_edit):
+    """タイトルの字数の制限（全角22文字）は、なくした。保存できる長さ（200文字）までは、通る。"""
+    for title in ("あ" * 22, "あ" * 23, "あ" * 40, "a" * 200):
+        assert admin_edit(title).status_code == 302
+        db.session.refresh(admin_edit.release)
+        assert admin_edit.release.title == title
+
+
+def test_title_is_still_limited_by_the_storage_size(admin_edit):
+    assert admin_edit("あ" * 201).status_code == 200  # 200文字を超えると、保存できない
     db.session.refresh(admin_edit.release)
-    assert admin_edit.release.title == title
+    assert admin_edit.release.title == FULL["title"]
 
 
-def test_title_of_23_fullwidth_chars_is_rejected(admin_edit):
-    res = admin_edit("あ" * 23)
-    assert res.status_code == 200
-    assert "全角22文字以内" in res.get_data(as_text=True)
-    db.session.refresh(admin_edit.release)
-    assert admin_edit.release.title == FULL["title"]  # 変わらない
-
-
-def test_halfwidth_chars_count_as_half(admin_edit):
-    assert admin_edit("a" * 44).status_code == 302  # 半角44文字 = 全角22文字
-    assert admin_edit("a" * 45).status_code == 200  # 超えると拒否
-
-
-def test_mixed_title_boundary(admin_edit):
-    assert admin_edit("あ" * 21 + "ab").status_code == 302  # 21 + 1 = 22
-    assert admin_edit("あ" * 21 + "abc").status_code == 200  # 22.5
-
-
-def test_service_also_guards_title(app, client_user, admin_user):
-    release = _pending_release(client_user)
-    with pytest.raises(service.ReleaseError, match="全角22文字"):
-        service.admin_update(release, admin_user, {"title": "あ" * 23}, "要旨")
+def test_title_message_no_longer_mentions_22_chars(admin_edit):
+    body = admin_edit("あ" * 201).get_data(as_text=True)
+    assert "全角22文字" not in body
 
 
 def test_client_cannot_set_the_title(client, client_user):
@@ -368,12 +346,6 @@ def test_client_cannot_set_the_title(client, client_user):
     client.post(f"/releases/{release.id}/edit", data={"location": "会場", "title": "勝手なタイトル"})
     db.session.refresh(release)
     assert release.title == ""
-
-
-def test_title_limit_is_configurable(admin_edit, app):
-    app.config["TITLE_MAX_WIDTH"] = 10
-    assert admin_edit("あ" * 11).status_code == 200
-    assert admin_edit("あ" * 10).status_code == 302
 
 
 # ---- 写真は横長だけ（ロゴは対象外） ----

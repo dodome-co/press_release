@@ -58,7 +58,7 @@ def _images(rendered) -> int:
 def test_basic_fields_are_filled(app, client_user):
     text = _text(_render(_release(client_user)))
     for expected in ("報道関係者各位", FULL["title"], "要旨です。", "2026年12月1日（火）14:00〜16:00", FULL["location"].replace(" ", ""),
-                     "◆商品の特徴", "・速い", "株式会社テスト", "〒123-4567東京都千代田区1-1-1", "TEL：03-1234-5678",
+                     "◆特徴", "・速い", "株式会社テスト", "〒123-4567東京都千代田区1-1-1", "TEL：03-1234-5678",
                      "E-mail：client@example.com", "株式会社テストプレスリリース"):
         assert expected in text, expected
 
@@ -102,12 +102,12 @@ def test_subtitle_and_speakers_are_shown_in_order(app, client_user):
     for expected in ("～地域の農家と連携～", "◆当日の対応者", "社長岩手盛子", "栗生産者花巻賢治"):
         assert expected in text, expected
     assert text.index(FULL["title"]) < text.index("～地域の農家と連携～") < text.index("要旨です。") < text.index("取材のご案内")
-    assert text.index("◆日時・会場") < text.index("◆当日の対応者") < text.index("◆商品の特徴")
+    assert text.index("◆日時・会場") < text.index("◆当日の対応者") < text.index("◆特徴")
 
 
 def test_empty_sections_are_omitted(app, client_user):
     text = _text(_render(_release(client_user, feature_1="", feature_2="", feature_3="")))
-    for gone in ("◆当日の対応者", "～～", "◆商品の特徴", "携帯"):
+    for gone in ("◆当日の対応者", "～～", "◆特徴", "携帯"):
         assert gone not in text, gone
     for label in ("設立：", "資本金：", "従業員数：", "事業内容：", "URL："):
         assert label not in text  # 会社概要の空の項目は、行ごと消える
@@ -125,7 +125,7 @@ def test_optional_parts_shown_when_present(app):
 
 def test_features_only_nonempty(app, client_user):
     text = _text(_render(_release(client_user, feature_1="A", feature_2="", feature_3="C")))
-    assert "◆商品の特徴・A・C◆会社概要" in text  # 空の「特徴2」は、行ごと出ない
+    assert "◆特徴・A・C◆会社概要" in text  # 空の「特徴2」は、行ごと出ない
 
 
 def test_photos_and_logo_are_embedded(app, client_user):
@@ -197,3 +197,21 @@ def test_write_release_leaves_no_temp_files(app, client_user):
     assert relative == f"releases/{r.id}/release.pdf"
     assert [p.name for p in resolve_path(relative).parent.iterdir()] == ["release.pdf"]
     assert resolve_path(relative).read_bytes().startswith(b"%PDF-")
+
+
+@pytest.mark.parametrize("heading", ["アプリの特徴", "施設の特徴", "商品の特徴", "ツアーの特徴", "協定における主な連携項目"])
+def test_features_heading_fits_the_subject(app, client_user, heading):
+    """特徴の見出しは、題材に合わせる（アプリなら「アプリの特徴」、施設なら「施設の特徴」など）。"""
+    text = _text(_render(_release(client_user, features_heading=heading)))
+    assert f"◆{heading}・速い" in text
+
+
+def test_features_heading_defaults_to_a_plain_word_not_product(app, client_user):
+    text = _text(_render(_release(client_user, features_heading=None)))
+    assert "◆特徴" in text and "商品の特徴" not in text  # 決まっていなければ、「商品」と決めつけない
+
+
+def test_a_long_title_wraps_and_still_fits_one_page(app, client_user):
+    """タイトルの字数の制限は、ない。長くても、折り返して、1枚に収まる。"""
+    rendered = _render(_release(client_user, title="とても長いタイトルの例です。" * 4))
+    assert rendered.pages == 1 and "とても長いタイトルの例です。" * 4 in _text(rendered)
