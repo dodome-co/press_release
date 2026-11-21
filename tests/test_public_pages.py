@@ -63,14 +63,14 @@ def test_about_page_tells_the_story_of_yukiwari(client):
     body = client.get("/about").get_data(as_text=True)
     assert "「ゆきわり。」は地域密着型のPR会社です。" in body
     assert "東北生まれで元地方紙記者の姉と、現役の動画編集者の弟が運営しています。" in body
-    assert "社名の由来は、ニンニク栽培・販売を営む母のオリジナルブランド「雪割XXXX」です。" in body
-    assert "ロゴはオリジナルキャラクター「雪割XXXファミリー」を使っています。" in body
-    assert body.index("お手伝いをしたい") < body.index("地域密着型") < body.index("姉と") < body.index("社名の由来")
+    assert "マスコットキャラクターは、母が栽培・販売するPRキャラクター「雪割ジャンボ」です。" in body
+    assert body.index("お手伝いをしたい") < body.index("地域密着型") < body.index("姉と") < body.index("マスコットキャラクター")
 
 
 def test_about_page_no_longer_has_the_old_wording(client):
     body = client.get("/about").get_data(as_text=True)
-    for old in ("PR代行", "東北生まれの姉弟", "拝借しています", "御社の広報活動をサポートします"):
+    for old in ("PR代行", "東北生まれの姉弟", "拝借しています", "御社の広報活動をサポートします",
+                "社名の由来", "ニンニク", "雪割XXXX", "雪割XXXファミリー"):  # 名前の由来の文は、載せない
         assert old not in body, old
 
 
