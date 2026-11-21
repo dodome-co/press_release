@@ -1,7 +1,7 @@
 # systemd の設定：アプリを、VM の起動時に自動で立ち上げ、止まったら、立ち上げ直す。
 # 置き場所：/etc/systemd/system/press-release.service
 [Unit]
-Description=プレスリリースサポート（ゆきわり。デモ）
+Description=ねたもと。（プレスリリース支援サービス・デモ）
 After=network.target
 
 [Service]

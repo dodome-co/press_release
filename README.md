@@ -1,4 +1,4 @@
-# プレスリリースサポートアプリ
+# ねたもと。（プレスリリース支援アプリ）
 
 [![ci](https://github.com/dodome-co/press_release/actions/workflows/ci.yml/badge.svg)](https://github.com/dodome-co/press_release/actions/workflows/ci.yml)
 
@@ -74,7 +74,7 @@ uv run pytest                # テストを実行
 会社名・所在地・メールアドレスは、コードや Git には書かず、環境変数で設定する（`.env` や、VM の設定ファイル）。
 
 ```
-OPERATOR_NAME=ゆきわり。
+OPERATOR_NAME=ねたもと。
 COMPANY_ADDRESS=岩手県盛岡市…
 SUPPORT_EMAIL=…@example.com
 ```

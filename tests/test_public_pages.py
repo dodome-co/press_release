@@ -20,7 +20,7 @@ def test_top_page_is_public_and_has_the_story(client):
     res = client.get("/")
     body = res.get_data(as_text=True)
     assert res.status_code == 200
-    for expected in ("プレスリリースサポート", "元地方紙の記者", "プレスリリースが届くまで", "1件目は無料",
+    for expected in ("ねたもと。", "元地方紙の記者", "プレスリリースが届くまで", "1件目は無料",
                      "記者発表会の企画・当日の同席", "投げ込み交渉代行", "自社媒体などに掲載する記事制作"):
         assert expected in body, expected
     assert "準備中です" not in body
@@ -28,14 +28,16 @@ def test_top_page_is_public_and_has_the_story(client):
 
 def test_top_page_has_the_main_message_and_the_logo(client):
     body = client.get("/").get_data(as_text=True)
-    assert "東北のいいものを、地域のメディアに。" in body and "より多くの人に。" in body
-    assert "東北のいいものを、地域のメディアに。</span><span>より多くの人に。" in body
+    # メインのキャッチコピー（大きく）→ 説明（小さく添える）→ サブのキャッチコピー
+    assert "<span>あなたのいいもの、</span><span>ニュースの種に育てます。</span>" in body
+    assert '<p class="tagline">東北密着型プレスリリース支援サービス</p>' in body
     assert "元地方紙の記者が、広報戦略を共に考え、地域の新聞社やテレビ局とつながるお手伝いをします。" in body
+    assert "元記者が元地方紙" not in body  # 重なりを直した
+    assert "東北のいいものを、地域のメディアに。" not in body  # 前のキャッチコピーは、なくした
     assert "御社のリリース作成や地域目線のPR戦略" not in body
     assert "地域に密着し、御社の広報戦略をサポートします" not in body
-    assert 'class="tagline"' in body and 'class="hero-logo"' in body and 'alt="ゆきわり。"' in body
-    # 大きい文字の見出しが先、説明が、そのあと
-    assert body.index('class="hero-logo"') < body.index('class="tagline"') < body.index("元地方紙の記者が")
+    assert 'class="hero-logo"' in body and 'alt="ねたもと。"' in body and "ゆきわり" not in body
+    assert body.index('class="hero-logo"') < body.index("あなたのいいもの") < body.index('class="tagline"') < body.index("元地方紙の記者が")
 
 
 def test_top_page_no_longer_has_the_old_message(client):
@@ -45,13 +47,16 @@ def test_top_page_no_longer_has_the_old_message(client):
         assert old not in body, old
 
 
-def test_main_message_is_big(client):
+def test_main_message_is_big_and_the_description_is_small(client):
+    """メインのキャッチコピーは大きく、その下の説明（東北密着型プレスリリース支援サービス）は、小さく添える。"""
     from pathlib import Path
 
     css = Path("app/static/css/style.css").read_text(encoding="utf-8")
-    size = float(re.search(r"section\.hero \.tagline \{[^}]*font-size: ([\d.]+)rem", css).group(1))
-    assert size >= 2.0  # 大きめの文字
-    assert size > float(re.search(r"section\.hero \.hero-lead \{ font-size: ([\d.]+)rem", css).group(1)) * 1.5
+    catch = float(re.search(r"section\.hero h1\.hero-catch \{[^}]*font-size: ([\d.]+)rem", css).group(1))
+    tagline = float(re.search(r"section\.hero \.tagline \{[^}]*font-size: ([\d.]+)rem", css).group(1))
+    lead = float(re.search(r"section\.hero \.hero-lead \{ font-size: ([\d.]+)rem", css).group(1))
+    assert catch >= 2.0  # 大きめの文字
+    assert catch > lead * 1.5 and tagline < catch and tagline <= lead  # 説明は、メインより、ずっと小さい
 
 
 def test_top_page_buttons_are_styled_as_buttons(client):
@@ -61,16 +66,16 @@ def test_top_page_buttons_are_styled_as_buttons(client):
 
 def test_about_page_tells_the_story_of_yukiwari(client):
     body = client.get("/about").get_data(as_text=True)
-    assert "「ゆきわり。」は地域密着型のPR会社です。" in body
+    assert "「ねたもと。」は地域密着型のPR会社です。" in body
     assert "東北生まれで元地方紙記者の姉と、現役の動画編集者の弟が運営しています。" in body
-    assert "マスコットキャラクターは、母が栽培・販売するPRキャラクター「雪割ジャンボ」です。" in body
+    assert "マスコットキャラクターは、母が栽培・販売するニンニク「雪割ジャンボ」のPRキャラクターです。" in body
     assert body.index("お手伝いをしたい") < body.index("地域密着型") < body.index("姉と") < body.index("マスコットキャラクター")
 
 
 def test_about_page_no_longer_has_the_old_wording(client):
     body = client.get("/about").get_data(as_text=True)
     for old in ("PR代行", "東北生まれの姉弟", "拝借しています", "御社の広報活動をサポートします",
-                "社名の由来", "ニンニク", "雪割XXXX", "雪割XXXファミリー"):  # 名前の由来の文は、載せない
+                "社名の由来", "雪割XXXX", "雪割XXXファミリー"):  # 名前の由来の文は、載せない（ニンニクは、雪割ジャンボの説明に使う）
         assert old not in body, old
 
 
@@ -80,7 +85,7 @@ def test_business_is_pr_and_public_relations_support(client):
 
 def test_company_name_defaults_to_yukiwari(client):
     body = client.get("/about").get_data(as_text=True)
-    assert "<th>会社名</th><td>ゆきわり。</td>" in body
+    assert "<th>会社名</th><td>ねたもと。</td>" in body
 
 
 def test_top_page_does_not_list_the_release_slot_as_a_separate_service(client):
@@ -128,11 +133,11 @@ def test_contact_details_come_from_settings_not_from_the_code(client, app):
     app.config.update(COMPANY_ADDRESS="岩手県盛岡市テスト1-2-3", SUPPORT_EMAIL="info@example.com", OPERATOR_NAME="テスト社")
     body = client.get("/about").get_data(as_text=True)
     assert "岩手県盛岡市テスト1-2-3" in body and "info@example.com" in body and "テスト社" in body
-    assert "VERBINDEN" not in body and "ゆきわり。」は" in body  # 設定の会社名と、紹介文の「ゆきわり。」は、別
+    assert "VERBINDEN" not in body and "ねたもと。」は" in body  # 設定の会社名と、紹介文の「ねたもと。」は、別
 
 
 def test_default_operator_name(app):
-    assert app.config["OPERATOR_NAME"] == "ゆきわり。"
+    assert app.config["OPERATOR_NAME"] == "ねたもと。"
 
 
 def test_about_escapes_settings(client, app):

@@ -17,7 +17,7 @@ def notify_order_paid(order) -> None:
         f"{link}\n\n{refund_policy_text()}\nお問い合わせ先：{support_contact()}\n"
     )
     try:
-        send_mail(order.user.email, "【プレスリリースサポート】ご注文を承りました", body)
+        send_mail(order.user.email, "【ねたもと。】ご注文を承りました", body)
     except Exception:
         current_app.logger.exception("注文確認メールの送信に失敗しました（注文ID=%s）", order.id)
 
@@ -48,7 +48,7 @@ def notify_delivered(order) -> None:
         f"お問い合わせ先：{support_contact()}\n"
     )
     try:
-        send_mail(order.user.email, "【プレスリリースサポート】納品が完了しました", body)
+        send_mail(order.user.email, "【ねたもと。】納品が完了しました", body)
     except Exception:
         current_app.logger.exception("納品のメールの送信に失敗しました（注文ID=%s）", order.id)
 
@@ -93,7 +93,7 @@ def notify_refunded(order, amount_yen: int) -> None:
         f"お問い合わせ先：{support_contact()}\n"
     )
     try:
-        send_mail(order.user.email, "【プレスリリースサポート】返金のお知らせ", body)
+        send_mail(order.user.email, "【ねたもと。】返金のお知らせ", body)
     except Exception:
         current_app.logger.exception("返金のメールの送信に失敗しました（注文ID=%s）", order.id)
 

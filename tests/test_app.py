@@ -1,7 +1,7 @@
 def test_index_returns_200(client):
     res = client.get("/")
     assert res.status_code == 200
-    assert "プレスリリースサポート" in res.get_data(as_text=True)
+    assert "ねたもと。" in res.get_data(as_text=True)
 
 
 def test_settings_defaults(app):
