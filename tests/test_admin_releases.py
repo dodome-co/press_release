@@ -2,7 +2,7 @@ import io
 from unittest.mock import patch
 
 import pytest
-from docx import Document
+from pypdf import PdfReader
 
 from app.extensions import db
 from app.models import Release, ReleaseEdit, ReleasePhoto, ReleaseScheduleItem, utcnow
@@ -11,6 +11,14 @@ from app.uploads import resolve_path
 
 from .conftest import login, make_user, png_bytes
 from .test_releases import FORM_FIELDS, FULL, form_data
+
+
+def _pdf_text(source) -> str:
+    """PDF の文字（空白・改行を除く）。ファイルのパスか、PDF の中身（バイト列）を渡す。"""
+    import re
+
+    reader = PdfReader(str(source) if not isinstance(source, bytes) else io.BytesIO(source))
+    return re.sub(r"\s+", "", "".join(page.extract_text() for page in reader.pages))
 
 
 def _pending_release(user, **overrides):
@@ -166,20 +174,21 @@ def _approve(admin_client, release):
     return admin_client.post(f"/admin/releases/{release.id}/approve")
 
 
-def test_approve_creates_word_and_sets_fields(admin_client, pending, admin_user):
+def test_approve_creates_pdf_and_sets_fields(admin_client, pending, admin_user):
     assert _approve(admin_client, pending).status_code == 302
     db.session.refresh(pending)
     assert pending.status == "approved"
     assert pending.approved_by == admin_user.id and pending.approved_at is not None
     path = resolve_path(pending.file_path)
     assert path.is_file()
-    text = "\n".join(p.text for p in Document(str(path)).paragraphs)
+    assert path.name == "release.pdf" and path.read_bytes().startswith(b"%PDF-")
+    text = _pdf_text(path)
     assert "管理者が書いた要旨です。" in text and FULL["title"] in text
 
 
-def test_approve_rolls_back_when_word_fails(admin_client, pending):
+def test_approve_rolls_back_when_pdf_fails(admin_client, pending):
     admin_client.post(f"/admin/releases/{pending.id}", data=_edit_data())
-    with patch("app.docgen.write_release", side_effect=RuntimeError("boom")):
+    with patch("app.pdfgen.write_release", side_effect=RuntimeError("boom")):
         res = admin_client.post(f"/admin/releases/{pending.id}/approve", follow_redirects=True)
     assert "承認できませんでした" in res.get_data(as_text=True)
     db.session.refresh(pending)
@@ -231,8 +240,8 @@ def test_client_can_download_only_after_approval(admin_client, client, client_us
     _approve(admin_client, pending)
     res = client.get(f"/releases/{pending.id}/download")
     assert res.status_code == 200
-    assert "attachment" in res.headers["Content-Disposition"]
-    assert Document(io.BytesIO(res.data)).paragraphs  # 開ける Word ファイル
+    assert "attachment" in res.headers["Content-Disposition"] and res.mimetype == "application/pdf"
+    assert res.data.startswith(b"%PDF-") and FULL["title"] in _pdf_text(res.data)  # 開ける PDF
 
 
 def test_other_client_cannot_download(app, admin_client, pending):
@@ -250,18 +259,19 @@ def test_admin_download_and_anonymous_blocked(app, admin_client, pending):
     assert app.test_client().get(f"/admin/releases/{pending.id}/download").status_code == 302
 
 
-def test_preview_docx_does_not_approve_or_save(admin_client, pending):
+def test_preview_pdf_does_not_approve_or_save(admin_client, pending):
     admin_client.post(f"/admin/releases/{pending.id}", data=_edit_data())
-    res = admin_client.get(f"/admin/releases/{pending.id}/preview.docx")
-    assert res.status_code == 200
-    assert "管理者が書いた要旨です。" in "\n".join(p.text for p in Document(io.BytesIO(res.data)).paragraphs)
+    res = admin_client.get(f"/admin/releases/{pending.id}/preview.pdf")
+    assert res.status_code == 200 and res.mimetype == "application/pdf"
+    assert "attachment" not in res.headers.get("Content-Disposition", "")  # ブラウザの中で開く（プレビュー）
+    assert "管理者が書いた要旨です。" in _pdf_text(res.data)
     db.session.refresh(pending)
     assert pending.status == "pending" and pending.file_path is None
 
 
-def test_preview_docx_only_for_pending(admin_client, pending):
+def test_preview_pdf_only_for_pending(admin_client, pending):
     _approve(admin_client, pending)
-    assert admin_client.get(f"/admin/releases/{pending.id}/preview.docx").status_code == 404
+    assert admin_client.get(f"/admin/releases/{pending.id}/preview.pdf").status_code == 404
 
 
 # ---- メール通知 ----

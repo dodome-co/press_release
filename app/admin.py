@@ -70,9 +70,18 @@ def release_detail(release_id):
                 return redirect(url_for("admin.release_detail", release_id=release.id))
             flash("保存しました。" if changed else "変更はありませんでした。", "success")
             return redirect(url_for("admin.release_detail", release_id=release.id))
+    pdf_pages = None
+    if editable:
+        from . import pdfgen
+
+        try:
+            pdf_pages = pdfgen.render_release(release).pages  # A4 1枚に収まっているか（1なら収まっている）
+        except Exception:
+            current_app.logger.exception("PDF のページ数を数えられませんでした（書類ID=%s）", release.id)
     return render_template(
         "admin/release_detail.html",
         release=release,
+        pdf_pages=pdf_pages,
         form=form,
         editable=editable,
         max_photos=MAX_PHOTOS,
@@ -120,7 +129,7 @@ def approve(release_id):
     release = _release_or_404(release_id)
     if _guard(lambda: service.approve(release, current_user)):
         notifications.notify_approved(release)
-        flash("承認しました。Word を出力しました。", "success")
+        flash("承認しました。PDF を出力しました。", "success")
     return redirect(url_for("admin.release_detail", release_id=release.id))
 
 
@@ -134,38 +143,40 @@ def reject(release_id):
     return redirect(url_for("admin.release_detail", release_id=release.id))
 
 
-@bp.get("/releases/<int:release_id>/preview.docx")
+@bp.get("/releases/<int:release_id>/preview.pdf")
 @admin_required
-def preview_docx(release_id):
-    """承認前に Word の仕上がりを見るための仮出力。保存せず、承認もしない。"""
-    from . import docgen
+def preview_pdf(release_id):
+    """承認前に PDF の仕上がりを見るための仮出力（ブラウザで開く）。保存せず、承認もしない。"""
+    from . import pdfgen
 
     release = _release_or_404(release_id)
     if release.status != RELEASE_PENDING:
         abort(404)
     try:
-        data = docgen.render_release(release)
+        rendered = pdfgen.render_release(release)
     except Exception:
         current_app.logger.exception("仮出力に失敗しました（書類ID=%s）", release.id)
-        flash("Word を作れませんでした。", "error")
+        flash("PDF を作れませんでした。", "error")
         return redirect(url_for("admin.release_detail", release_id=release.id))
-    return send_file(
-        io.BytesIO(data),
-        as_attachment=True,
-        download_name=f"press_release_{release.id}_preview.docx",
-        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    )
+    return pdf_response(rendered.data, f"press_release_{release.id}_preview.pdf", inline=True)
+
+
+def pdf_response(data: bytes, filename: str, inline: bool = False):
+    """PDF を返す。inline なら、ブラウザの中で開く（プレビュー）。そうでなければ、ダウンロード。"""
+    response = send_file(io.BytesIO(data), as_attachment=not inline, download_name=filename, mimetype="application/pdf")
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 @bp.get("/releases/<int:release_id>/download")
 @admin_required
 def download(release_id):
     release = _release_or_404(release_id)
-    return send_approved_docx(release)
+    return send_approved_pdf(release)
 
 
-def send_approved_docx(release: Release):
-    """承認済みの Word を返す。承認前や、ファイルがないときは 404。"""
+def send_approved_pdf(release: Release):
+    """承認済みの PDF を返す。承認前や、ファイルがないときは 404。"""
     if release.status != RELEASE_APPROVED or not release.file_path:
         abort(404)
     try:
@@ -177,8 +188,8 @@ def send_approved_docx(release: Release):
     response = send_file(
         path,
         as_attachment=True,
-        download_name=f"press_release_{release.id}.docx",
-        mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        download_name=f"press_release_{release.id}.pdf",
+        mimetype="application/pdf",
     )
     response.headers["Cache-Control"] = "private, no-store"
     return response

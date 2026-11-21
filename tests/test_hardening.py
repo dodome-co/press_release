@@ -5,12 +5,11 @@ import time
 from unittest.mock import patch
 
 import pytest
-from docx import Document
 from PIL import Image
 from sqlalchemy.exc import IntegrityError
 from werkzeug.datastructures import FileStorage
 
-from app import create_app, docgen
+from app import create_app, pdfgen
 from app.extensions import db
 from app.models import Release, User, utcnow
 from app.releases import service
@@ -172,15 +171,18 @@ def test_control_characters_removed_when_saving(client, client_user):
     assert release.location == "会場です"
 
 
-def test_control_characters_do_not_break_word_ampersands(app, client_user):
-    """制御文字があると、書類全体の & < > が消えてしまっていた問題。直接 DB に入れた場合でも守る。"""
+def test_control_characters_do_not_break_pdf_ampersands(app, client_user):
+    """制御文字があっても、書類全体の & < > が壊れない。直接 DB に入れた場合でも守る。"""
+    import re
+
+    from pypdf import PdfReader
+
     client_user.company_name = "A&B <C> \x01社"
     r = Release(user_id=client_user.id, summary="x\x02", approved_at=utcnow(), **{**FULL, "title": "t\x01 & <u>"})
     db.session.add(r)
     db.session.commit()
-    doc = Document(io.BytesIO(docgen.render_release(r)))
-    text = "\n".join(p.text for p in doc.paragraphs)
-    assert "t & <u>" in text and "A&B <C> 社" in text
+    text = re.sub(r"\s+", "", "".join(p.extract_text() for p in PdfReader(io.BytesIO(pdfgen.render_release(r).data)).pages))
+    assert "t&<u>" in text and "A&B<C>社" in text
 
 
 def test_control_characters_removed_from_profile_and_register(client, client_user):
@@ -462,7 +464,9 @@ def test_logo_can_be_portrait_or_square(client, client_user):
         assert db.session.get(User, client_user.id).logo_path
 
 
-def test_two_landscape_photos_are_side_by_side_in_word(app, client, client_user):
+def test_two_landscape_photos_are_in_the_pdf(app, client, client_user):
+    from pypdf import PdfReader
+
     login(client, "client@example.com")
     release = _new_release(client)
     _upload_photo(client, release.id, _png(300, 200))
@@ -470,8 +474,6 @@ def test_two_landscape_photos_are_side_by_side_in_word(app, client, client_user)
     db.session.refresh(release)
     release.summary, release.approved_at = "要旨", utcnow()
     db.session.commit()
-    from docx.oxml.ns import qn
+    pdf = PdfReader(io.BytesIO(pdfgen.render_release(release).data))
+    assert sum(len(page.images) for page in pdf.pages) == 2
 
-    doc = Document(io.BytesIO(docgen.render_release(release)))
-    per_paragraph = [len(p._p.findall(".//" + qn("w:drawing"))) for p in doc.paragraphs]
-    assert per_paragraph.count(2) == 1

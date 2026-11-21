@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-プレスリリース作成支援アプリ「ゆきわり。」。クライアント（地域の中小企業）が入力した内容から、元記者の管理者が要旨を書いて承認し、プレスリリースの Word を出力する Flask アプリ。有料サービスの申込み（Stripe）もある。ビジネスプランの発表用のデモとして、Google Cloud の VM で動かしている。
+プレスリリース作成支援アプリ「ゆきわり。」。クライアント（地域の中小企業）が入力した内容から、元記者の管理者が要旨を書いて承認し、プレスリリースの PDF を出力する Flask アプリ。有料サービスの申込み（Stripe）もある。ビジネスプランの発表用のデモとして、Google Cloud の VM で動かしている。
 
 - 要件：[docs/spec/requirements.md](docs/spec/requirements.md)（詳細は [docs/仕様書.md](docs/仕様書.md)）
 - 画面：[docs/design/screens.md](docs/design/screens.md)
@@ -16,13 +16,13 @@
 | Web | Flask 3、Jinja2（`app/templates/`）、CSS（`app/static/css/style.css`） |
 | データベース | Flask-SQLAlchemy、Flask-Migrate（Alembic）。開発とテストは SQLite、VM は MySQL 8（PyMySQL、cryptography） |
 | 認証・フォーム | Flask-Login、Flask-WTF（CSRF 対策）、email-validator。パスワードは Werkzeug のハッシュ |
-| Word の出力 | docxtpl（python-docx）。雛形は `templates/press_release.docx` |
+| PDF の出力 | reportlab。日本語フォント（BIZ UDPゴシック）を埋め込み、A4 1枚に収まるまで文字を小さくする。`app/pdfgen.py`、フォントは `app/fonts/` |
 | 画像 | Pillow（形式・向き・大きさの検証） |
 | 決済 | Stripe（Checkout と Webhook。デモはテストモードだけ。今回のデモでは動かさない） |
 | AI | Claude API（`anthropic`。`app/ai.py` だけが呼ぶ。テストでは置き換えて、実際には呼ばない） |
 | 設定 | 環境変数（開発は `.env` を python-dotenv で読む。VM は `/etc/press-release.env`） |
 | 公開（VM） | gunicorn、Nginx（合言葉の Basic 認証）、systemd。設定は `deploy/` |
-| テスト | pytest（約800件） |
+| テスト | pytest（約900件。PDF の中身は pypdf で確かめる） |
 
 ## コマンド
 
@@ -55,7 +55,7 @@ uv run flask reset-demo --yes  # デモのデータを作り直す（デモ環�
 | `app/orders/` | サービスの申込み、Stripe の支払いと Webhook、返金 |
 | `app/admin_orders.py`、`app/accounts.py`、`app/admin_services.py`、`app/admin_mails.py` | 管理者の注文・会員・自社サービス・メールの画面 |
 | `app/services_catalog.py` | サービスの名前・説明・料金（ここ1か所で決める） |
-| `app/docgen.py` | Word の出力 |
+| `app/pdfgen.py` | PDF の出力（承認時の保存、プレビュー、承認後の修正での作り直し） |
 | `app/uploads.py`、`app/files.py` | 画像・ファイルのアップロードの検証と保存、表示 |
 | `app/ratelimit.py` | 回数制限 |
 | `app/mail.py` | メールの送り方（console / database） |
@@ -90,7 +90,9 @@ uv run flask reset-demo --yes  # デモのデータを作り直す（デモ環�
 
 ## 設計の要点
 
-- **書類の流れ**：下書き（draft）→ 承認待ち（pending）→ 承認済み（approved）または差し戻し（rejected）。差し戻しから再提出できる。要旨（前文）は管理者が書き、空のままでは承認できない。**Word は承認した時点で作る**（提出時には作らない）。
+- **書類の流れ**：下書き（draft）→ 承認待ち（pending）→ 承認済み（approved）または差し戻し（rejected）。差し戻しから再提出できる。要旨（前文）は管理者が書き、空のままでは承認できない。**PDF は承認した時点で作る**（提出時には作らない）。
+- **承認後の修正**：承認されたあと、ダウンロードする前に、クライアントが、PDF をプレビューし、内容を修正できる（直すと PDF が作り直される。編集履歴に、誰が直したかが残る）。
+- **ログインの入口**：クライアントは `/login`、管理者は `/admin/login`（専用）。管理者のアカウントは `/login` から入れず、クライアントのアカウントは `/admin/login` から入れない。
 - **無料枠**：初めて提出した書類だけを数える（`first_submitted_at`）。差し戻し後の再提出は数えない。枠は「リリース作成の追加」の購入で増える。
 - **注文の流れ**：未払い（unpaid）→ 支払済み（paid）→ 進捗（受付→着手→納品済み）。返金の上限は進捗で決まる（受付＝全額、着手＝50%、納品済み＝不可）。
 - **退会**：会員・書類・写真・ファイルを消し、注文は `user_id` を空にして、匿名で残す。

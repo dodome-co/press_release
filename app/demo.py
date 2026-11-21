@@ -13,7 +13,7 @@ from flask import current_app
 from PIL import Image, ImageDraw
 from werkzeug.datastructures import FileStorage
 
-from . import docgen, uploads
+from . import pdfgen, uploads
 from .extensions import db
 from .models import (
     AIChatMessage,
@@ -203,7 +203,7 @@ def _release(user: User, admin: User, *, approved: bool, title: str, days_ago: i
         release.approved_by = admin.id
         release.approved_at = utcnow() - timedelta(days=days_ago - 1)
         release.status = "approved"
-        release.file_path = docgen.write_release(release)
+        release.file_path = pdfgen.write_release(release)
         db.session.commit()
     return release
 

@@ -14,8 +14,9 @@
 <ul>
   {% for r in approved_releases %}
   <li>{{ r.title or '（タイトルなし）' }}（承認：{{ r.approved_at|dt }}）
-    <a href="{{ url_for('releases.download', release_id=r.id) }}">Word をダウンロード</a>
-    ／ <a href="{{ url_for('releases.view', release_id=r.id) }}">内容を見る</a></li>
+    <a href="{{ url_for('releases.preview_pdf', release_id=r.id) }}" target="_blank">PDF をプレビュー</a>
+    ／ <a href="{{ url_for('releases.revise', release_id=r.id) }}">内容を修正</a>
+    ／ <a href="{{ url_for('releases.download', release_id=r.id) }}">PDF をダウンロード</a></li>
   {% endfor %}
 </ul>
 <p>次は、記者クラブへの<a href="{{ url_for('guide.index') }}">投げ込みのしかた</a>をご覧ください。</p>
