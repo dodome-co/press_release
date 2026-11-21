@@ -8,6 +8,31 @@
   <p class="error">差し戻しの理由：{{ release.reject_reason }}</p>
 {% endif %}
 
+<section class="chat" id="ai-chat"
+         data-url="{{ url_for('releases.chat_send', release_id=release.id) }}"
+         data-csrf="{{ csrf_token() }}">
+  <h2>AI と話して、内容を伝える</h2>
+  {% if ai_ready %}
+  <p>AI が、取材してほしいサービスや商品について、質問します。答えていくと、下の「サービスの内容」と「要旨の元になる情報」の欄に、自動で入ります。</p>
+  <ol class="chat-log" aria-live="polite">
+    <li class="chat-ai">{{ first_question }}</li>
+    {% for m in release.chat_messages %}
+    <li class="chat-{{ m.role }}">{{ m.content }}</li>
+    {% endfor %}
+  </ol>
+  <p class="chat-status" role="status"></p>
+  <form class="chat-form">
+    <label for="chat-message">あなたの答え</label><br>
+    <textarea id="chat-message" name="message" rows="3" maxlength="{{ config['INPUT_MAX_LENGTH'] }}"></textarea><br>
+    <button type="submit">送る</button>
+    <small>この書類で AI を使える残りの回数：<span class="chat-remaining">{{ chat_remaining }}</span>回</small>
+  </form>
+  <script src="{{ url_for('static', filename='js/chat.js') }}" defer></script>
+  {% else %}
+  <p>AI のチャットは、準備中です。下の欄に、直接入力してください。</p>
+  {% endif %}
+</section>
+
 <form method="post" novalidate>
   {{ form.hidden_tag() }}
   <h2>基本情報</h2>
@@ -15,6 +40,7 @@
   {{ field(form.event_date) }}
   {{ field(form.event_start_time) }}
   {{ field(form.event_end_time) }}
+  <p class="field-hint">取材は平日の、午前中か{{ latest_start_label }}までがおすすめです。</p>
   {{ field(form.location) }}
 
   <h2>当日のスケジュール（任意・最大5行）</h2>

@@ -262,6 +262,36 @@ hr { border: 0; border-top: 1px solid var(--primary-line); margin: 24px 0; }
 }
 
 /* ---- 印刷 ---- */
+/* AI とのチャット（書類の入力画面） */
+.chat {
+  background: var(--white);
+  border: 1px solid var(--primary-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  margin: 1rem 0 1.5rem;
+}
+.chat-log {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  max-height: 24rem;
+  overflow-y: auto;
+}
+.chat-log li {
+  max-width: 85%;
+  margin: 0.4rem 0;
+  padding: 0.55rem 0.8rem;
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.chat-log .chat-ai { background: var(--primary-soft); }
+.chat-log .chat-client { background: var(--peach); margin-left: auto; }
+.chat-status { color: var(--muted); min-height: 1.5em; margin: 0.25rem 0; }
+.chat-form textarea { width: 100%; }
+.field-hint { color: var(--muted); font-size: 0.9rem; margin-top: -0.25rem; }
+
 @media print {
   .site-header, .demo-banner, .flash { display: none; }
   body { background: var(--white); }

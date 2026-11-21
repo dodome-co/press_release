@@ -207,6 +207,12 @@ class Release(db.Model):
         cascade="all, delete-orphan",
         order_by="ReleaseEdit.id",
     )
+    chat_messages = db.relationship(
+        "AIChatMessage",
+        back_populates="release",
+        cascade="all, delete-orphan",
+        order_by="AIChatMessage.id",
+    )
 
     @property
     def event_at_display(self) -> str:
@@ -279,6 +285,33 @@ class ReleaseEdit(db.Model):
     new_value = db.Column(db.Text, nullable=True)
 
     release = db.relationship("Release", back_populates="edits")
+
+
+# AI とのやりとりの、発言した側
+CHAT_ROLE_CLIENT = "client"
+CHAT_ROLE_AI = "ai"
+CHAT_ROLES = (CHAT_ROLE_CLIENT, CHAT_ROLE_AI)
+
+# 入力の方法（音声入力は、段階5で使う）
+CHAT_INPUT_TEXT = "text"
+CHAT_INPUT_VOICE = "voice"
+
+
+class AIChatMessage(db.Model):
+    """書類ごとの、クライアントと AI のやりとり（計画書_AI要旨.md）。書類と一緒に消える。"""
+
+    __tablename__ = "ai_chat_messages"
+
+    id = db.Column(db.Integer, primary_key=True)
+    release_id = db.Column(
+        db.Integer, db.ForeignKey("releases.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    role = db.Column(db.String(20), nullable=False)  # CHAT_ROLES
+    content = db.Column(db.Text, nullable=False)
+    input_method = db.Column(db.String(10), nullable=False, default=CHAT_INPUT_TEXT)
+    created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
+
+    release = db.relationship("Release", back_populates="chat_messages")
 
 
 # ---- 注文・決済 ----

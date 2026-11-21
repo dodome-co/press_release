@@ -18,7 +18,8 @@
 | 認証・フォーム | Flask-Login、Flask-WTF（CSRF 対策）、email-validator。パスワードは Werkzeug のハッシュ |
 | Word の出力 | docxtpl（python-docx）。雛形は `templates/press_release.docx` |
 | 画像 | Pillow（形式・向き・大きさの検証） |
-| 決済 | Stripe（Checkout と Webhook。デモはテストモードだけ） |
+| 決済 | Stripe（Checkout と Webhook。デモはテストモードだけ。今回のデモでは動かさない） |
+| AI | Claude API（`anthropic`。`app/ai.py` だけが呼ぶ。テストでは置き換えて、実際には呼ばない） |
 | 設定 | 環境変数（開発は `.env` を python-dotenv で読む。VM は `/etc/press-release.env`） |
 | 公開（VM） | gunicorn、Nginx（合言葉の Basic 認証）、systemd。設定は `deploy/` |
 | テスト | pytest（約800件） |
@@ -47,7 +48,7 @@ uv run flask reset-demo --yes  # デモのデータを作り直す（デモ環�
 | --- | --- |
 | `app/__init__.py` | アプリの組み立て（`create_app`） |
 | `app/config.py` | 設定。`APP_ENV` で development / demo / production / testing を切り替える。本番とデモは、設定が足りないと起動しない |
-| `app/models.py` | テーブルの定義（13個） |
+| `app/models.py` | テーブルの定義（14個） |
 | `app/auth/` | 会員登録・ログイン・パスワード再設定、アクセス制御のデコレーター（`client_required` など） |
 | `app/releases/` | クライアントの書類（入力・提出）。`service.py` に状態の変更の決まりがある |
 | `app/admin.py` | 管理者の書類の確認・編集・承認・差し戻し |
