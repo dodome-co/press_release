@@ -530,6 +530,9 @@ def test_avatar_file_exists_and_is_small():
 
     path = Path("app/static/img/ai-avatar.webp")
     assert path.is_file() and path.stat().st_size < 30_000
+    from PIL import Image
+
+    assert Image.open(path).size == (160, 160)  # 丸く切り抜いて使う正方形
 
 
 def test_chat_time_is_shown_in_japan_time(app):
