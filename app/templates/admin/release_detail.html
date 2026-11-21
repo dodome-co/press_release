@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "auth/_field.html" import field %}
+{% from "releases/_chat.html" import chat_item %}
 {% block title %}書類の確認{% endblock %}
 {% block content %}
 <h1>書類の確認</h1>
@@ -21,7 +22,7 @@
 <h2>クライアントと AI のやりとり</h2>
 {% if release.chat_messages %}
 <ol class="chat-log chat-log-readonly">
-  {% for m in release.chat_messages %}<li class="chat-{{ m.role }}">{{ m.content }}</li>{% endfor %}
+  {% for m in release.chat_messages %}{{ chat_item(m.role, m.content, m.created_at|clock) }}{% endfor %}
 </ol>
 {% else %}
 <p>（チャットのやりとりはありません）</p>
@@ -96,7 +97,7 @@
 
 {% else %}
 <h2>書類の内容</h2>
-<p>タイトル：{% if release.title %}【取材のお願い】{{ release.title }}{% endif %}</p>
+<p>タイトル：{{ release.title }}</p>
 {% if release.subtitle %}<p>サブタイトル：{{ release.subtitle }}</p>{% endif %}
 <p style="white-space:pre-wrap">{{ release.summary or '' }}</p>
 <ul>

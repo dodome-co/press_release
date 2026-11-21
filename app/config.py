@@ -56,7 +56,7 @@ class Config:
     # 下書きとして同時に持てる書類の数（提出するまでは無料枠に数えないため、増えすぎを防ぐ）
     DRAFT_LIMIT = int(os.environ.get("DRAFT_LIMIT", "3"))
     REJECT_REASON_MAX_LENGTH = 1000
-    # タイトル（「【取材のお願い】」を除く）の長さ。全角換算。Word のタイトルが2行にならない長さ
+    # タイトルの長さ。全角換算。Word のタイトルが2行にならない長さ
     TITLE_MAX_WIDTH = int(os.environ.get("TITLE_MAX_WIDTH", "22"))
 
     # 書類の入力の長さ（仕様書 F3）

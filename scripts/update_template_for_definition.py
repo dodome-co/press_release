@@ -27,11 +27,18 @@ def main() -> None:
     def find(prefix):
         return next(el for el in items if text_of(el).startswith(prefix))
 
+    # タイトルの「【取材のお願い】」は、付けない（よいプレスリリースの定義）
+    for t in doc.element.body.iter():
+        if t.tag.endswith("}t") and t.text and "【取材のお願い】" in t.text:
+            t.text = t.text.replace("【取材のお願い】", "")
+            print("タイトルから「【取材のお願い】」を外しました")
+
     if "{{ subtitle }}" in "".join(text_of(el) for el in items):
+        doc.save(PATH)
         print("すでに直してあります")
         return
 
-    title = find("【取材のお願い】")
+    title = find("{{ title }}")
     location = find("会場：")
     heading_h = find("◆ 日時・会場")
     line_p = find("会社概要") if False else find("{{ row.label }}")

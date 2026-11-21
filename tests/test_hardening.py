@@ -303,7 +303,7 @@ def test_reject_reason_length_limit(app, client_user, admin_user):
     assert release.status == "rejected"
 
 
-# ---- タイトルの長さ（全角22文字以内。「【取材のお願い】」は除く） ----
+# ---- タイトルの長さ（全角22文字以内） ----
 def test_display_width():
     from app.textutil import display_width
 

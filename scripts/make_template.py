@@ -50,7 +50,7 @@ para("{{ issued_date }}", align=WD_ALIGN_PARAGRAPH.RIGHT, space_after=0)
 para("{{ company_name }}", align=WD_ALIGN_PARAGRAPH.RIGHT)
 
 para("報道関係者各位", space_after=8)
-para("【取材のお願い】{{ title }}", bold=True, size=15, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=8)
+para("{{ title }}", bold=True, size=15, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=8)
 para("{%p if subtitle %}")
 para("～{{ subtitle }}～", bold=True, size=12, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=8)
 para("{%p endif %}")

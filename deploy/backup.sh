@@ -22,7 +22,7 @@ if [[ "$URL" == mysql* ]]; then
   CNF=$(mktemp); trap 'rm -f "$CNF"' EXIT; chmod 600 "$CNF"
   printf '[client]\nuser=%s\npassword=%s\nhost=%s\nport=%s\n' "$DBUSER" "$DBPASS" "$DBHOST" "$DBPORT" > "$CNF"
   # --single-transaction：動いている最中でも、整合性のあるコピーになる
-  mysqldump --defaults-extra-file="$CNF" --single-transaction --default-character-set=utf8mb4 "$DBNAME" | gzip > "$DEST/app-$STAMP.sql.gz"
+  mysqldump --defaults-extra-file="$CNF" --single-transaction --no-tablespaces --default-character-set=utf8mb4 "$DBNAME" | gzip > "$DEST/app-$STAMP.sql.gz"
   DBFILE="app-$STAMP.sql.gz"
 else
   # SQLite は、動いている最中に、ファイルを単にコピーすると、壊れたコピーになることがある。専用の方法で、整合性のあるコピーを作る

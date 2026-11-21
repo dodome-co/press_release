@@ -1,0 +1,13 @@
+{# チャットの1つの発言。LINE のように、AI は左（丸いアイコン付き）、クライアントは右。画面の JavaScript（chat.js）も、同じ形を作る #}
+{% macro chat_item(role, text, time=None) %}
+{% if role == 'ai' %}
+<li class="chat-ai">
+  <img class="chat-avatar" src="{{ url_for('static', filename='img/ai-avatar.webp') }}" alt="ゆきわり。の AI" width="40" height="40">
+  <div class="chat-body"><span class="chat-bubble">{{ text }}</span>{% if time %}<time class="chat-time">{{ time }}</time>{% endif %}</div>
+</li>
+{% else %}
+<li class="chat-client">
+  <div class="chat-body">{% if time %}<span class="chat-read">既読<br>{{ time }}</span>{% endif %}<span class="chat-bubble">{{ text }}</span></div>
+</li>
+{% endif %}
+{% endmacro %}
