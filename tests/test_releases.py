@@ -54,9 +54,19 @@ def _new_release(client):
     return Release.query.order_by(Release.id.desc()).first()
 
 
+# フォームに入力する項目（日付・時刻・場所）。それ以外は、AI とのチャットで入る（テストでは、直接入れる）
+FORM_FIELDS = ("event_date", "event_start_time", "event_end_time", "location")
+
+
 def _save(client, release, **overrides):
-    data = form_data({**FULL, **overrides})
-    return client.post(f"/releases/{release.id}/edit", data=data)
+    """フォームで日付・時刻・場所を保存し、チャットで入る内容（特徴・要旨の元になる情報など）を直接入れる。"""
+    values = {**FULL, **overrides}
+    res = client.post(f"/releases/{release.id}/edit", data=form_data({k: values[k] for k in FORM_FIELDS if k in values}))
+    for name, value in values.items():
+        if name not in FORM_FIELDS:
+            setattr(release, name, value)
+    db.session.commit()
+    return res
 
 
 # ---- アクセス制御 ----
@@ -89,63 +99,80 @@ def test_cannot_see_or_edit_other_users_release(client, logged_in, app):
 def test_create_draft_and_edit(client, logged_in):
     release = _new_release(client)
     assert release.status == "draft" and release.user_id == logged_in.id
-    res = _save(client, release, feature_2="安い")
+    res = client.post(f"/releases/{release.id}/edit", data=form_data({k: FULL[k] for k in FORM_FIELDS}))
     assert res.status_code == 302
     db.session.refresh(release)
-    assert release.title == FULL["title"]
-    assert release.features == ["速い", "安い"]
+    assert release.location == FULL["location"] and release.event_date == FULL["event_date"]
+    assert release.event_start_time == FULL["event_start_time"]
 
 
 def test_draft_can_be_saved_incomplete(client, logged_in):
     release = _new_release(client)
-    res = client.post(f"/releases/{release.id}/edit", data={"title": "途中まで"})
+    res = client.post(f"/releases/{release.id}/edit", data={"location": "途中まで"})
     assert res.status_code == 302
     db.session.refresh(release)
-    assert release.title == "途中まで"
+    assert release.location == "途中まで"
 
 
-def test_input_too_long_rejected(client, logged_in):
+def test_form_only_has_date_time_and_place(client, logged_in, app):
+    """日時と場所だけがフォーム。ほかの内容は、AI とのチャットで集める。"""
     release = _new_release(client)
-    res = _save(client, release, source_what="あ" * 501)
+    body = client.get(f"/releases/{release.id}/edit").get_data(as_text=True)
+    for name in ("event_date", "event_start_time", "event_end_time", "location"):
+        assert f'name="{name}"' in body, name
+    for gone in ("title", "service_description", "feature_1", "application_method", "application_deadline_at",
+                 "source_what", "source_why", "source_message", "schedule_time_1"):
+        assert f'name="{gone}"' not in body, gone
+    for gone in ("取材のお申し込み", "当日のスケジュール"):
+        assert gone not in body, gone
+    assert "プレビューへ（提出画面に続きます）" in body
+
+
+def test_fields_removed_from_the_form_are_ignored(client, logged_in):
+    """古い画面から送られても、チャットで集める内容や、なくした項目は、書き換えない。"""
+    release = _new_release(client)
+    client.post(f"/releases/{release.id}/edit", data={
+        "location": "会場", "title": "勝手なタイトル", "source_what": "勝手に書き換え", "feature_1": "勝手な特徴",
+        "application_method": "申し込み", "schedule_time_1": "14:00", "schedule_content_1": "説明"})
+    db.session.refresh(release)
+    assert (release.title, release.source_what, release.feature_1, release.application_method) == ("", "", "", "")
+    assert release.schedule_items == []
+
+
+def test_location_too_long_rejected(client, logged_in):
+    release = _new_release(client)
+    res = client.post(f"/releases/{release.id}/edit", data={"location": "あ" * 301})
     assert res.status_code == 200
     db.session.refresh(release)
-    assert release.source_what == ""  # 保存されない
+    assert release.location == ""  # 保存されない
 
 
 def test_html_is_escaped_in_preview(client, logged_in):
     release = _new_release(client)
-    _save(client, release, title="<script>alert(1)</script>")
+    _save(client, release, title="<script>alert(1)</script>", subtitle="<b>x</b>", speakers="<i>社長</i>",
+          location="<img src=x>")
     body = client.get(f"/releases/{release.id}").get_data(as_text=True)
-    assert "<script>alert(1)</script>" not in body
+    for raw in ("<script>alert(1)</script>", "<b>x</b>", "<i>社長</i>", "<img src=x>"):
+        assert raw not in body, raw
     assert "&lt;script&gt;" in body
 
 
-# ---- スケジュール ----
-def test_schedule_saved_in_order_skipping_blank_rows(client, logged_in):
+def test_preview_shows_what_ai_made_and_hides_removed_parts(client, logged_in):
     release = _new_release(client)
-    data = form_data({**FULL, "schedule_time_1": "14:00", "schedule_content_1": "説明",
-                      "schedule_time_3": "15:00", "schedule_content_3": "デモ"})
-    client.post(f"/releases/{release.id}/edit", data=data)
-    db.session.refresh(release)
-    assert [(i.position, i.time_text, i.content) for i in release.schedule_items] == [
-        (1, "14:00", "説明"), (2, "15:00", "デモ")]
+    _save(client, release, title="新サービス", subtitle="地域の農家と連携", summary="AI がまとめた要旨です。",
+          speakers="社長　岩手　盛子\n生産者　花巻　賢治")
+    body = client.get(f"/releases/{release.id}").get_data(as_text=True)
+    for expected in ("新サービス", "～地域の農家と連携～", "AI がまとめた要旨です。", "当日の対応者", "社長\u3000岩手\u3000盛子".replace("\u3000", "　"),
+                     "生産者　花巻　賢治", "特徴"):
+        assert expected in body, expected
+    for gone in ("取材のお申し込み", "当日のスケジュール", "サービスの内容"):
+        assert gone not in body, gone
 
 
-def test_schedule_requires_both_time_and_content(client, logged_in):
+def test_preview_without_title_says_admin_decides(client, logged_in):
     release = _new_release(client)
-    res = client.post(f"/releases/{release.id}/edit", data=form_data({**FULL, "schedule_time_1": "14:00"}))
-    assert res.status_code == 200
-    assert "時間と内容の両方" in res.get_data(as_text=True)
-    db.session.refresh(release)
-    assert release.schedule_items == []
-
-
-def test_schedule_can_be_cleared(client, logged_in):
-    release = _new_release(client)
-    client.post(f"/releases/{release.id}/edit", data=form_data({**FULL, "schedule_time_1": "14:00", "schedule_content_1": "説明"}))
-    client.post(f"/releases/{release.id}/edit", data=form_data(FULL))
-    db.session.refresh(release)
-    assert release.schedule_items == []
+    body = client.get(f"/releases/{release.id}").get_data(as_text=True)
+    assert "タイトルは、管理者が決めます" in body
 
 
 # ---- 写真 ----
@@ -262,10 +289,10 @@ def test_pending_release_cannot_be_edited_or_deleted_by_client(client, logged_in
     release = _new_release(client)
     _save(client, release)
     client.post(f"/releases/{release.id}/submit")
-    res = _save(client, release, title="書き換え")
+    res = client.post(f"/releases/{release.id}/edit", data={"location": "書き換え"})
     assert res.status_code == 302 and "/releases/%d" % release.id in res.headers["Location"]
     db.session.refresh(release)
-    assert release.title == FULL["title"]
+    assert release.location == FULL["location"]
     client.post(f"/releases/{release.id}/delete")
     assert db.session.get(Release, release.id) is not None
     res = _upload(client, release)
@@ -383,7 +410,6 @@ def test_end_time_is_optional(client, logged_in):
     ({"event_date": "令和8年12月1日"}, "日付"),
     ({"event_date": "2026-02-30"}, "日付"),
     ({"event_start_time": "25:00"}, "時刻"),
-    ({"application_deadline_at": "11月28日まで"}, "日付"),
     ({"event_end_time": "13:00"}, "開始時刻より後"),
     ({"event_start_time": "", "event_end_time": "16:00"}, "開始時刻も入力"),
     ({"event_date": ""}, "日付も入力"),
@@ -398,7 +424,62 @@ def test_invalid_dates_are_rejected_and_not_saved(client, logged_in, overrides, 
 
 def test_date_fields_are_required_for_submit(client, logged_in):
     release = _new_release(client)
-    _save(client, release, event_date="", event_start_time="", event_end_time="", application_deadline_at="")
+    _save(client, release, event_date="", event_start_time="", event_end_time="")
     db.session.refresh(release)
     missing = service.missing_required(release)
-    assert "取材会の日付" in missing and "開始時刻" in missing and "申込の締切" in missing
+    assert "取材会の日付" in missing and "開始時刻" in missing
+    assert not any("申込" in m for m in missing)  # 取材の申し込みは、聞かない
+
+
+# ---- 提出と承認に必要な項目（定義：タイトルは管理者が決める。取材の申し込みは、なくす） ----
+def test_submit_needs_chat_results_but_not_title_or_application(client, logged_in):
+    release = _new_release(client)
+    _save(client, release, title="", application_method="", application_deadline_at=None)
+    db.session.refresh(release)
+    assert service.missing_required(release) == []
+    assert client.post(f"/releases/{release.id}/submit").status_code == 302
+    db.session.refresh(release)
+    assert release.status == "pending"
+
+
+def test_submit_is_refused_until_the_chat_has_finished(client, logged_in):
+    release = _new_release(client)
+    _save(client, release, feature_1="", source_what="", source_why="", source_message="")
+    res = client.post(f"/releases/{release.id}/submit", follow_redirects=True)
+    assert "AI とのチャットで入ります" in res.get_data(as_text=True)
+    db.session.refresh(release)
+    assert release.status == "draft"
+
+
+def test_approval_needs_title_and_summary(client, logged_in, admin_user, app):
+    release = _new_release(client)
+    _save(client, release, title="", summary="要旨")
+    client.post(f"/releases/{release.id}/submit")
+    db.session.refresh(release)
+    assert service.missing_for_approval(release) == ["タイトル"]
+    with pytest.raises(service.ReleaseError, match="タイトル"):
+        service.approve(release, admin_user)
+
+
+# ---- マイページ：承認されたプレスリリースを表示し、ダウンロードできる ----
+def test_mypage_lists_approved_releases_with_download(client, logged_in, admin_user, app):
+    release = _new_release(client)
+    _save(client, release, summary="要旨")
+    client.post(f"/releases/{release.id}/submit")
+    assert "承認されたプレスリリースは、まだありません" in client.get("/mypage/").get_data(as_text=True)  # 承認前
+    admin = app.test_client()
+    login(admin, "admin@example.com")
+    admin.post(f"/admin/releases/{release.id}/approve")
+    body = client.get("/mypage/").get_data(as_text=True)
+    assert FULL["title"] in body and f"/releases/{release.id}/download" in body
+    assert client.get(f"/releases/{release.id}/download").status_code == 200
+
+
+def test_mypage_does_not_show_other_users_or_unapproved_releases(client, logged_in):
+    other = make_user(email="other@example.com")
+    db.session.add(Release(user_id=other.id, title="他人の書類", status="approved", summary="x"))
+    mine = Release(user_id=logged_in.id, title="自分の承認待ち", status="pending")
+    db.session.add(mine)
+    db.session.commit()
+    body = client.get("/mypage/").get_data(as_text=True)
+    assert "他人の書類" not in body and "自分の承認待ち" not in body

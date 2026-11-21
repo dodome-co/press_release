@@ -67,6 +67,7 @@ class Config:
     AI_MODEL = os.environ.get("AI_MODEL", "claude-opus-5-5")
     AI_EFFORT = os.environ.get("AI_EFFORT", "low")  # チャットは速さを優先する（low / medium / high）
     AI_TIMEOUT_SECONDS = int(os.environ.get("AI_TIMEOUT_SECONDS", "45"))
+    AI_COMPOSE_EFFORT = os.environ.get("AI_COMPOSE_EFFORT", "medium")  # 最後のまとめは、質を優先する
     # 1つの書類で、AI を呼べる回数（料金の使いすぎを防ぐ）
     AI_MAX_CALLS_PER_RELEASE = int(os.environ.get("AI_MAX_CALLS_PER_RELEASE", "30"))
     # 取材に好まれる開始時刻の、いちばん遅い時刻（これより遅いと、AI が確認する）。曜日は、平日を勧める

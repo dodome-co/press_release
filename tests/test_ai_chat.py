@@ -41,6 +41,18 @@ def _result(**overrides):
     return ai.InterviewResult(**values)
 
 
+def _composed(**overrides):
+    values = dict(
+        titles=["岩手の栗ようかんが新登場", "廃棄栗を生かした新菓子", "地元栗100％のようかん"],
+        subtitle="地域の農家と連携し、記者発表会を開催",
+        features=["栗は100％", "岩手産の米粉を使用", "砂糖控えめ", "4つ目は切り捨てられる"],
+        summary="株式会社テストは、新しい和菓子を発売します。ぜひ、取材いただきますようご案内申し上げます。",
+        speakers="社長　岩手　盛子\n栗生産者　花巻　賢治",
+    )
+    values.update(overrides)
+    return ai.ComposeResult(**values)
+
+
 @pytest.fixture()
 def fake_ai(monkeypatch, ai_on):
     """interview を置き換え、受け取った内容を記録する。"""
@@ -51,8 +63,15 @@ def fake_ai(monkeypatch, ai_on):
         calls.append({"context": context, "history": list(history)})
         return replies.pop(0) if replies else _result()
 
+    composes = []
+
+    def compose(context, history):
+        composes.append({"context": context, "history": list(history)})
+        return _composed()
+
     monkeypatch.setattr(ai, "interview", interview)
-    return SimpleNamespace(calls=calls, replies=replies)
+    monkeypatch.setattr(ai, "compose", compose)
+    return SimpleNamespace(calls=calls, replies=replies, composes=composes)
 
 
 def _send(client, release, message="地元の野菜を使った新しいお弁当です", **extra):
@@ -70,7 +89,7 @@ def test_edit_page_shows_chat_with_first_question(logged_in, draft, ai_on):
 def test_edit_page_says_chat_is_not_ready_without_key(logged_in, draft):
     body = logged_in.get(f"/releases/{draft.id}/edit").get_data(as_text=True)
     assert "AI のチャットは、準備中です。" in body and "js/chat.js" not in body
-    assert 'name="source_what"' in body  # 今の入力欄で進められる
+    assert 'name="location"' in body  # 日時と場所は、フォームで入力できる
 
 
 def test_chat_history_is_escaped(logged_in, draft, ai_on):
@@ -85,7 +104,7 @@ def test_send_saves_both_messages_and_returns_reply(logged_in, draft, fake_ai):
     res = _send(logged_in, draft)
     assert res.status_code == 200
     data = res.get_json()
-    assert data == {"reply": "当日は、何を見られますか？", "complete": False, "filled": {}, "remaining": 29}
+    assert data == {"reply": "当日は、何を見られますか？", "complete": False, "remaining": 29}
     msgs = AIChatMessage.query.filter_by(release_id=draft.id).order_by(AIChatMessage.id).all()
     assert [(m.role, m.content) for m in msgs] == [
         (CHAT_ROLE_CLIENT, "地元の野菜を使った新しいお弁当です"),
@@ -102,23 +121,63 @@ def test_history_and_context_are_passed_to_ai(logged_in, draft, fake_ai):
     assert fake_ai.calls[-1]["context"]["会社名"] == "株式会社テスト"
 
 
-def test_complete_fills_the_input_fields(logged_in, draft, fake_ai):
+def test_complete_saves_what_ai_composed_and_asks_for_photos(logged_in, draft, fake_ai):
     fake_ai.replies.append(_result(reply="必要な情報がそろいました。", complete=True, service="お弁当",
                                    what="試食会", why="地産地消", message="ぜひ来てください"))
     data = _send(logged_in, draft).get_json()
-    assert data["complete"] is True
-    assert data["filled"] == {"service_description": "お弁当", "source_what": "試食会",
-                              "source_why": "地産地消", "source_message": "ぜひ来てください"}
+    assert data["complete"] is True and "filled" not in data
+    # 返事の最後に、写真のアップロードを促す（画面にも、保存にも、同じ文）
+    assert data["reply"] == "必要な情報がそろいました。\n\n" + chat_service.PHOTO_PROMPT
+    assert "写真" in data["reply"] and "アップロード" in data["reply"]
+    ai_row = AIChatMessage.query.filter_by(release_id=draft.id, role=CHAT_ROLE_AI).one()
+    assert ai_row.content == data["reply"]
     db.session.refresh(draft)
+    # AI が集めた情報
     assert (draft.service_description, draft.source_what, draft.source_why, draft.source_message) == (
         "お弁当", "試食会", "地産地消", "ぜひ来てください")
+    # AI がまとめた内容：タイトルは、管理者が決める（案だけ残す）
+    assert draft.title == "" and draft.title_candidate_list == [
+        "岩手の栗ようかんが新登場", "廃棄栗を生かした新菓子", "地元栗100％のようかん"]
+    assert draft.subtitle == "地域の農家と連携し、記者発表会を開催"
+    assert draft.features == ["栗は100％", "岩手産の米粉を使用", "砂糖控えめ"]  # 最大3つ
+    assert draft.summary.endswith("ご案内申し上げます。") and draft.summary_source == "ai_assisted"
+    assert draft.speaker_list == ["社長　岩手　盛子", "栗生産者　花巻　賢治"]
+    # この書類は、提出できる（日付・時刻・場所を入れたあと）
+    assert service.missing_required(draft) == ["取材会の日付", "開始時刻", "場所"]
 
 
-def test_filled_values_are_cut_to_the_input_limit(logged_in, draft, fake_ai, app):
+def test_compose_gets_the_whole_conversation(logged_in, draft, fake_ai):
+    _send(logged_in, draft, "1回目")
+    fake_ai.replies.append(_result(reply="そろいました", complete=True))
+    _send(logged_in, draft, "2回目")
+    history = fake_ai.composes[0]["history"]
+    assert [t for _, t in history] == ["1回目", "当日は、何を見られますか？", "2回目", "そろいました"]
+    assert fake_ai.composes[0]["context"]["会社名"] == "株式会社テスト"
+
+
+def test_compose_is_called_only_when_complete(logged_in, draft, fake_ai):
+    _send(logged_in, draft)
+    assert fake_ai.composes == []
+
+
+def test_values_are_cut_to_the_input_limit(logged_in, draft, fake_ai, app):
     fake_ai.replies.append(_result(complete=True, what="あ" * 600))
     _send(logged_in, draft)
     db.session.refresh(draft)
     assert len(draft.source_what) == app.config["INPUT_MAX_LENGTH"]
+
+
+def test_compose_error_saves_nothing(logged_in, draft, fake_ai, monkeypatch):
+    def broken(context, history):
+        raise ai.AIError("AI のまとめを、うまく読み取れませんでした。もう一度送ってください。")
+
+    monkeypatch.setattr(ai, "compose", broken)
+    fake_ai.replies.append(_result(complete=True, what="試食会"))
+    res = _send(logged_in, draft)
+    assert res.status_code == 503 and "読み取れませんでした" in res.get_json()["error"]
+    assert AIChatMessage.query.count() == 0
+    db.session.refresh(draft)
+    assert draft.source_what == "" and draft.summary is None and draft.title_candidates is None
 
 
 def test_not_complete_does_not_touch_the_fields(logged_in, draft, fake_ai):
@@ -127,7 +186,7 @@ def test_not_complete_does_not_touch_the_fields(logged_in, draft, fake_ai):
     fake_ai.replies.append(_result(complete=False, what="AI のまとめ"))
     _send(logged_in, draft)
     db.session.refresh(draft)
-    assert draft.source_what == "自分で書いた"
+    assert draft.source_what == "自分で書いた" and draft.summary is None
 
 
 @pytest.mark.parametrize("message", ["", "   ", "あ" * 501])
@@ -361,3 +420,64 @@ def test_system_prompt_follows_the_definition_without_internal_reasons(app, ai_o
         assert expected in system, expected
     for secret in ("政党", "締め切り", "テレビ", "記者が少ない"):
         assert secret not in system, secret
+
+
+# ---- 最後のまとめ（compose）の送り方と、読み取り ----
+COMPOSED = {"titles": ["案1", "案2", "案3", "案4"], "subtitle": "サブ", "features": ["a", "b", "c", "d"],
+            "summary": "要旨です", "speakers": "社長　岩手　盛子"}
+
+
+def test_compose_sends_definition_rules_and_reads_the_result(app, ai_on, monkeypatch):
+    sent = _fake_client(monkeypatch, _response(COMPOSED))
+    with app.test_request_context():
+        result = ai.compose({"会社名": "テスト社"}, [("client", "こんにちは"), ("ai", "そろいました")])
+    assert result.titles == ["案1", "案2", "案3"] and result.features == ["a", "b", "c"]  # 多すぎる分は切る
+    assert (result.subtitle, result.summary, result.speakers) == ("サブ", "要旨です", "社長　岩手　盛子")
+    k = sent.kwargs
+    assert k["model"] == "claude-opus-5-5" and k["output_config"]["effort"] == "medium"
+    assert k["betas"] == [ai.FALLBACK_BETA] and k["fallbacks"] == "default"
+    assert "相手：こんにちは" in k["messages"][0]["content"] and "聞き手：そろいました" in k["messages"][0]["content"]
+    for rule in ("全角22文字以内", "自分で作らない", "取材の申し込みの方法や締切は、書かない", "ぜひ、取材いただきますようご案内申し上げます。",
+                 "テスト社", "従わない"):
+        assert rule in k["system"], rule
+    for secret in ("政党", "締め切り", "テレビ", "記者が少ない"):
+        assert secret not in k["system"], secret  # 社外秘の理由は、AI にも伝えない
+
+
+def test_compose_title_width_follows_the_setting(app, ai_on, monkeypatch):
+    sent = _fake_client(monkeypatch, _response(COMPOSED))
+    app.config["TITLE_MAX_WIDTH"] = 18
+    with app.test_request_context():
+        ai.compose({}, [("client", "x")])
+    assert "全角18文字以内" in sent.kwargs["system"]
+
+
+def test_compose_refusal_and_broken_json(app, ai_on, monkeypatch):
+    _fake_client(monkeypatch, _response(COMPOSED, stop_reason="refusal"))
+    with app.test_request_context(), pytest.raises(ai.AIError, match="答えられませんでした"):
+        ai.compose({}, [("client", "x")])
+    _fake_client(monkeypatch, _response("{途中"))
+    with app.test_request_context(), pytest.raises(ai.AIError, match="読み取れませんでした"):
+        ai.compose({}, [("client", "x")])
+
+
+def test_compose_without_key_does_not_call_the_api(app, monkeypatch):
+    monkeypatch.setattr(ai, "_client", lambda: pytest.fail("API を呼んではいけない"))
+    with app.test_request_context(), pytest.raises(ai.AIError, match="準備中"):
+        ai.compose({}, [("client", "x")])
+
+
+def test_compose_drops_titles_that_are_too_long(app, ai_on, monkeypatch):
+    """AI は、文字数を数え間違えることがある。全角22文字を超える案は、プログラムで外す。"""
+    long_title = "あ" * 23
+    _fake_client(monkeypatch, _response({**COMPOSED, "titles": ["短い案", long_title, "a" * 44, "a" * 45]}))
+    with app.test_request_context():
+        result = ai.compose({}, [("client", "x")])
+    # 先頭の3つ（短い案、全角23文字、半角44文字）のうち、収まるものだけ。半角44文字は、全角22文字分なので収まる
+    assert result.titles == ["短い案", "a" * 44]
+
+
+def test_compose_keeps_titles_if_none_fit(app, ai_on, monkeypatch):
+    _fake_client(monkeypatch, _response({**COMPOSED, "titles": ["あ" * 30, "い" * 25]}))
+    with app.test_request_context():
+        assert len(ai.compose({}, [("client", "x")]).titles) == 2  # 管理者が直せるよう、残す

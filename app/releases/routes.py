@@ -4,7 +4,7 @@ from flask_login import current_user
 from .. import ai, ratelimit
 from ..auth.decorators import client_required
 from ..extensions import db
-from ..models import MAX_PHOTOS, MAX_SCHEDULE_ITEMS, Release, ReleasePhoto
+from ..models import MAX_PHOTOS, Release, ReleasePhoto
 from ..uploads import UploadError
 from . import bp, chat, notifications, service
 from .forms import ReleaseForm
@@ -55,25 +55,20 @@ def edit(release_id):
         flash("この書類は、いまは編集できません。", "error")
         return redirect(url_for("releases.view", release_id=release.id))
     form = ReleaseForm(obj=release if request.method == "GET" else None)
-    schedule = [(i.time_text, i.content) for i in release.schedule_items]
     if request.method == "POST":
         if form.validate_on_submit():
             try:
                 service.update_fields(release, _form_values(form))
-                service.replace_schedule(release, form.schedule_rows())
                 db.session.commit()
             except service.ReleaseError as e:  # 保存の直前に、管理者の操作などで状態が変わったとき
                 flash(str(e), "error")
                 return redirect(url_for("releases.view", release_id=release.id))
             flash("保存しました。", "success")
             return redirect(url_for("releases.edit", release_id=release.id))
-        schedule = form.schedule_rows()
-    schedule = (list(schedule) + [("", "")] * MAX_SCHEDULE_ITEMS)[:MAX_SCHEDULE_ITEMS]
     return render_template(
         "releases/edit.html",
         form=form,
         release=release,
-        schedule=schedule,
         max_photos=MAX_PHOTOS,
         missing=service.missing_required(release),
         ai_ready=ai.is_configured(),

@@ -22,7 +22,6 @@ from ..models import (
     Release,
     ReleaseEdit,
     ReleasePhoto,
-    ReleaseScheduleItem,
     User,
     utcnow,
 )
@@ -33,19 +32,18 @@ class ReleaseError(Exception):
 
 
 # 提出時に必ず埋まっている必要がある項目（項目名 → 表示名）
+# 日付・時刻・場所は、フォームの入力。特徴と要旨の元になる情報は、AI とのチャットで集まる（チャットが終わると入る）
 REQUIRED_FOR_SUBMIT = {
-    "title": "タイトル",
     "event_date": "取材会の日付",
     "event_start_time": "開始時刻",
     "location": "場所",
-    "service_description": "サービスや商品の概要",
-    "feature_1": "特徴1",
-    "application_method": "取材の申込方法",
-    "application_deadline_at": "申込の締切",
-    "source_what": "取材してほしい内容",
-    "source_why": "なぜ今これを行うのか",
-    "source_message": "伝えたいこと",
+    "feature_1": "特徴（AI とのチャットで入ります）",
+    "source_what": "取材してほしい内容（AI とのチャットで入ります）",
+    "source_why": "なぜ今これを行うのか（AI とのチャットで入ります）",
+    "source_message": "伝えたいこと（AI とのチャットで入ります）",
 }
+# 承認のときに、さらに必要な項目（管理者が決める・仕上げる）
+REQUIRED_FOR_APPROVE = {"title": "タイトル", "summary": "要旨（前文）"}
 
 # 日付・時刻の項目（文字列ではなく、日付型・時刻型で持つ）
 DATE_FIELDS = ("event_date", "event_start_time", "event_end_time", "application_deadline_at")
@@ -63,13 +61,8 @@ def _display(release: Release, name: str) -> str:
     return value or ""
 
 
-# クライアントが編集できる項目
-CLIENT_FIELDS = (
-    "title", "event_date", "event_start_time", "event_end_time", "location", "service_description",
-    "feature_1", "feature_2", "feature_3",
-    "application_method", "application_deadline_at",
-    "source_what", "source_why", "source_message",
-)
+# クライアントがフォームで編集できる項目
+CLIENT_FIELDS = ("event_date", "event_start_time", "event_end_time", "location")
 
 
 # ---- 排他（同時の操作で状態が食い違わないようにする） ----
@@ -181,24 +174,9 @@ def _check_title(title: str | None) -> None:
 def update_fields(release: Release, values: dict) -> None:
     """入力項目を更新する（クライアント用）。画面の保存処理が commit する。"""
     _lock_editable(release)
-    if "title" in values:
-        _check_title(values["title"])
     for name in CLIENT_FIELDS:
         if name in values:
             setattr(release, name, values[name] if name in DATE_FIELDS else clean_text(values[name]))
-
-
-def replace_schedule(release: Release, rows: list[tuple[str, str]]) -> None:
-    """当日のスケジュールを入れ替える。空の行は除き、最大5行。"""
-    _lock_editable(release)
-    cleaned = [(clean_text(t), clean_text(c)) for t, c in rows]
-    cleaned = [(t, c) for t, c in cleaned if t or c]
-    release.schedule_items.clear()
-    db.session.flush()
-    for position, (time_text, content) in enumerate(cleaned, start=1):
-        release.schedule_items.append(
-            ReleaseScheduleItem(position=position, time_text=time_text, content=content)
-        )
 
 
 def _free_position(release: Release) -> int:
@@ -260,12 +238,20 @@ def delete_draft(release: Release) -> None:
 
 
 # ---- 提出 ----
-def missing_required(release: Release) -> list[str]:
-    def empty(name: str) -> bool:
-        value = getattr(release, name)
-        return value is None if name in DATE_FIELDS else not (value or "").strip()
+def _empty(release: Release, name: str) -> bool:
+    value = getattr(release, name)
+    return value is None if name in DATE_FIELDS else not (value or "").strip()
 
-    return [label for name, label in REQUIRED_FOR_SUBMIT.items() if empty(name)]
+
+def missing_required(release: Release) -> list[str]:
+    """提出に足りない項目。"""
+    return [label for name, label in REQUIRED_FOR_SUBMIT.items() if _empty(release, name)]
+
+
+def missing_for_approval(release: Release) -> list[str]:
+    """承認に足りない項目（提出に必要な項目と、タイトル・要旨）。"""
+    names = {**REQUIRED_FOR_SUBMIT, **REQUIRED_FOR_APPROVE}
+    return [label for name, label in names.items() if _empty(release, name)]
 
 
 def submit(release: Release) -> None:
@@ -289,16 +275,20 @@ def submit(release: Release) -> None:
 
 # ---- 管理者の操作（承認待ちの書類だけ） ----
 ADMIN_FIELDS = (
-    "title", "event_date", "event_start_time", "event_end_time", "location", "service_description",
-    "feature_1", "feature_2", "feature_3",
-    "application_method", "application_deadline_at",
+    "title", "subtitle", "event_date", "event_start_time", "event_end_time", "location",
+    "feature_1", "feature_2", "feature_3", "speakers",
 )
-FIELD_LABELS = {**REQUIRED_FOR_SUBMIT, "event_end_time": "終了時刻", "feature_2": "特徴2", "feature_3": "特徴3", "summary": "要旨（前文）",
-                "schedule": "当日のスケジュール", "photos": "写真"}
-
-
-def _schedule_text(items) -> str:
-    return "\n".join(f"{i.time_text} {i.content}" for i in items)
+FIELD_LABELS = {
+    **REQUIRED_FOR_SUBMIT,
+    **REQUIRED_FOR_APPROVE,
+    "event_end_time": "終了時刻",
+    "feature_2": "特徴2",
+    "feature_3": "特徴3",
+    "subtitle": "サブタイトル",
+    "speakers": "当日の対応者",
+    "summary": "要旨（前文）",
+    "photos": "写真",
+}
 
 
 def _record_edit(release: Release, admin, field: str, old: str | None, new: str | None) -> None:
@@ -309,7 +299,7 @@ def _record_edit(release: Release, admin, field: str, old: str | None, new: str 
     )
 
 
-def admin_update(release: Release, admin, values: dict, schedule_rows: list[tuple[str, str]], summary: str) -> list[str]:
+def admin_update(release: Release, admin, values: dict, summary: str) -> list[str]:
     """管理者が書類を編集する。変わった項目だけを編集履歴に残し、変えた項目名の一覧を返す。"""
     _lock_pending(release)
     if "title" in values:
@@ -330,18 +320,6 @@ def admin_update(release: Release, admin, values: dict, schedule_rows: list[tupl
         if name in values:
             apply(name, values[name] if name in DATE_FIELDS else clean_text(values[name]))
     apply("summary", clean_text(summary))
-
-    old_schedule = _schedule_text(release.schedule_items)
-    cleaned = [(clean_text(t), clean_text(c)) for t, c in schedule_rows]
-    cleaned = [(t, c) for t, c in cleaned if t or c]
-    new_schedule = "\n".join(f"{t} {c}" for t, c in cleaned)
-    if old_schedule != new_schedule:
-        _record_edit(release, admin, "schedule", old_schedule, new_schedule)
-        release.schedule_items.clear()
-        db.session.flush()
-        for position, (t, c) in enumerate(cleaned, start=1):
-            release.schedule_items.append(ReleaseScheduleItem(position=position, time_text=t, content=c))
-        changed.append("schedule")
 
     if changed:
         release.last_edited_by = admin.id
@@ -381,7 +359,7 @@ def approve(release: Release, admin) -> None:
     _lock_pending(release)  # 同時に承認・差し戻しが来ても、1つだけが通る
     if not (release.summary or "").strip():
         _fail("要旨（前文）を入力してから承認してください。")
-    missing = missing_required(release)
+    missing = missing_for_approval(release)
     if missing:
         _fail("次の項目が空です：" + "、".join(missing))
 

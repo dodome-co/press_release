@@ -9,6 +9,20 @@
   <li><a href="{{ url_for('profile.service_profile') }}">自社サービスの紹介</a></li>
   <li><a href="{{ url_for('orders.services') }}">サービスのご案内</a></li>
 </ul>
+<h2>承認されたプレスリリース</h2>
+{% if approved_releases %}
+<ul>
+  {% for r in approved_releases %}
+  <li>{{ r.title or '（タイトルなし）' }}（承認：{{ r.approved_at|dt }}）
+    <a href="{{ url_for('releases.download', release_id=r.id) }}">Word をダウンロード</a>
+    ／ <a href="{{ url_for('releases.view', release_id=r.id) }}">内容を見る</a></li>
+  {% endfor %}
+</ul>
+<p>次は、記者クラブへの<a href="{{ url_for('guide.index') }}">投げ込みのしかた</a>をご覧ください。</p>
+{% else %}
+<p>承認されたプレスリリースは、まだありません。管理者が確認して承認すると、ここに表示されます。</p>
+{% endif %}
+
 <h2>最近の注文</h2>
 {% if recent_orders %}
 <ul>

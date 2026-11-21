@@ -102,7 +102,11 @@ def test_client2_has_a_release_waiting_for_approval(demo_app):
     _seed()
     user = User.query.filter_by(email="demo-client2@example.com").one()
     release = Release.query.filter_by(user_id=user.id).one()
-    assert release.status == "pending" and release.summary is None and release.file_path is None
+    assert release.status == "pending" and release.file_path is None
+    # AI がまとめた内容（要旨・サブタイトル・当日の対応者・タイトルの案）と、チャットのやりとりが入っている
+    assert release.summary.endswith("ご案内申し上げます。") and release.summary_source == "ai_assisted"
+    assert release.subtitle and len(release.speaker_list) == 2 and len(release.title_candidate_list) == 3
+    assert [m.role for m in release.chat_messages] == ["ai", "client", "ai", "client", "ai"]
     assert len(release.photos) == 2
     paid_slot = Order.query.filter_by(user_id=user.id, service_type="release_creation").one()
     assert paid_slot.status == "paid" and paid_slot.progress is None

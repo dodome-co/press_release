@@ -157,7 +157,10 @@ class Release(db.Model):
     user_id = db.Column(
         db.Integer, db.ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    title = db.Column(db.String(200), nullable=False, default="")
+    title = db.Column(db.String(200), nullable=False, default="")  # 管理者が決める（AI の案は title_candidates）
+    subtitle = db.Column(db.String(200), nullable=True)  # サブタイトル（AI がまとめ、管理者が直す）
+    speakers = db.Column(db.Text, nullable=True)  # 当日の対応者（1行に1人）
+    title_candidates = db.Column(db.Text, nullable=True)  # AI が出したタイトルの案（1行に1つ。管理者が選ぶ）
     event_date = db.Column(db.Date, nullable=True)  # 取材会の日付
     event_start_time = db.Column(db.Time, nullable=True)  # 開始時刻
     event_end_time = db.Column(db.Time, nullable=True)  # 終了時刻（任意）
@@ -223,6 +226,15 @@ class Release(db.Model):
     def application_deadline_display(self) -> str:
         """申込の締切を「2026年11月28日（金）17:00まで」の形にする。"""
         return format_deadline(self.application_deadline_at)
+
+    @property
+    def speaker_list(self) -> list[str]:
+        """当日の対応者（空でない行だけ）。"""
+        return [line.strip() for line in (self.speakers or "").splitlines() if line.strip()]
+
+    @property
+    def title_candidate_list(self) -> list[str]:
+        return [line.strip() for line in (self.title_candidates or "").splitlines() if line.strip()]
 
     @property
     def features(self) -> list[str]:
