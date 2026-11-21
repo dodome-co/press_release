@@ -1,4 +1,5 @@
-# CI：プッシュと PR のたびに、全テストとマイグレーションの確認を、自動で実行する。
+# CI：プッシュと PR のたびに、MySQL（VM と同じ）で、全テストとマイグレーションの確認を、自動で実行する。
+# SQLite（開発と同じ）での全テストは、手動（「Actions」タブの「Run workflow」）で実行する。
 # 結果は、GitHub の PR の画面と「Actions」タブに表示される。
 name: ci
 
@@ -19,8 +20,10 @@ concurrency:
 
 jobs:
   # 開発と同じ SQLite で、全テスト。開発の Python（3.14）と、VM の Python（3.12）の両方で確かめる
+  # 手動のときだけ動く（「Actions」タブ → ci → Run workflow）
   test-sqlite:
     name: テスト（SQLite・Python ${{ matrix.python }}）
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
