@@ -299,9 +299,8 @@ def _record_edit(release: Release, admin, field: str, old: str | None, new: str 
     )
 
 
-def admin_update(release: Release, admin, values: dict, summary: str) -> list[str]:
-    """管理者が書類を編集する。変わった項目だけを編集履歴に残し、変えた項目名の一覧を返す。"""
-    _lock_pending(release)
+def _apply_edits(release: Release, editor, values: dict, summary: str) -> list[str]:
+    """項目を直す。変わった項目だけを、編集履歴に残し、変えた項目名の一覧を返す（commit は呼び出し側）。"""
     if "title" in values:
         _check_title(values["title"])
     changed: list[str] = []
@@ -313,18 +312,48 @@ def admin_update(release: Release, admin, values: dict, summary: str) -> list[st
         if old != new_value:
             old_text = _display(release, field)
             setattr(release, field, new_value)
-            _record_edit(release, admin, field, old_text, _display(release, field))
+            _record_edit(release, editor, field, old_text, _display(release, field))
             changed.append(field)
 
     for name in ADMIN_FIELDS:
         if name in values:
             apply(name, values[name] if name in DATE_FIELDS else clean_text(values[name]))
     apply("summary", clean_text(summary))
-
     if changed:
-        release.last_edited_by = admin.id
+        release.last_edited_by = editor.id
         release.last_edited_at = utcnow()
+    return changed
+
+
+def admin_update(release: Release, admin, values: dict, summary: str) -> list[str]:
+    """管理者が書類を編集する（承認待ちの書類だけ）。変えた項目名の一覧を返す。"""
+    _lock_pending(release)
+    changed = _apply_edits(release, admin, values, summary)
     db.session.commit()
+    return changed
+
+
+def client_revise(release: Release, user, values: dict, summary: str) -> list[str]:
+    """承認されたあと、ダウンロードする前に、クライアントが内容を直す。直したら、PDF を作り直す。
+
+    承認の日時などは変えない。誰が・いつ・何を直したかは、編集履歴に残る（管理者の画面で見られる）。
+    """
+    from .. import pdfgen
+
+    _lock(release, (RELEASE_APPROVED,), "承認された書類だけ、この画面で直せます。")
+    changed = _apply_edits(release, user, values, summary)
+    if not changed:
+        db.session.rollback()
+        return []
+    new_path = None
+    try:
+        new_path = pdfgen.write_release(release)
+        release.file_path = new_path
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception("PDF の作り直しに失敗したため、修正を取り消しました（書類ID=%s）", release.id)
+        raise ReleaseError("PDF を作り直せなかったため、修正できませんでした。もう一度お試しください。") from e
     return changed
 
 
@@ -353,8 +382,8 @@ def admin_delete_photo(release: Release, admin, photo: ReleasePhoto) -> None:
 
 
 def approve(release: Release, admin) -> None:
-    """承認する。要旨が空だと承認できない。承認と Word の出力は、まとめて成功か失敗かにする。"""
-    from .. import docgen
+    """承認する。要旨が空だと承認できない。承認と PDF の出力は、まとめて成功か失敗かにする。"""
+    from .. import pdfgen
 
     _lock_pending(release)  # 同時に承認・差し戻しが来ても、1つだけが通る
     if not (release.summary or "").strip():
@@ -368,14 +397,14 @@ def approve(release: Release, admin) -> None:
         release.approved_by = admin.id
         release.approved_at = utcnow()
         release.status = RELEASE_APPROVED
-        relative_path = docgen.write_release(release)  # 失敗したら、下で全部元に戻す
+        relative_path = pdfgen.write_release(release)  # 失敗したら、下で全部元に戻す
         release.file_path = relative_path
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         uploads.delete_file(relative_path)
-        current_app.logger.exception("Word の出力に失敗したため、承認を取り消しました（書類ID=%s）", release.id)
-        raise ReleaseError("Word の出力に失敗したため、承認できませんでした。もう一度お試しください。") from e
+        current_app.logger.exception("PDF の出力に失敗したため、承認を取り消しました（書類ID=%s）", release.id)
+        raise ReleaseError("PDF の出力に失敗したため、承認できませんでした。もう一度お試しください。") from e
 
 
 def reject(release: Release, admin, reason: str) -> None:

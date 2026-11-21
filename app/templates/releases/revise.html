@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "auth/_field.html" import field %}
+{% block title %}内容の修正{% endblock %}
+{% block content %}
+<h1>内容の修正</h1>
+<p><a href="{{ url_for('releases.view', release_id=release.id) }}">プレビューに戻る</a></p>
+<p>管理者が承認した内容を、ダウンロードの前に、直せます。「保存する」を押すと、PDF が作り直されます。直した内容は、管理者の画面でも、編集履歴として見られます。</p>
+
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  {{ field(form.title, placeholder="全角22文字以内") }}
+  {{ field(form.subtitle) }}
+  {{ field(form.summary, rows=8) }}
+  {{ field(form.event_date) }}
+  {{ field(form.event_start_time) }}
+  {{ field(form.event_end_time) }}
+  {{ field(form.location) }}
+  {{ field(form.speakers, rows=3) }}
+  {{ field(form.feature_1) }}
+  {{ field(form.feature_2) }}
+  {{ field(form.feature_3) }}
+  <button type="submit">保存する（PDF を作り直す）</button>
+</form>
+
+{% if pdf_pages == 1 %}<p class="field-hint">いまの内容は、A4 1枚に収まっています。</p>
+{% elif pdf_pages %}<p class="error">いまの内容は、A4 1枚に収まっていません（{{ pdf_pages }}ページ）。文章を短くしてください。</p>{% endif %}
+<p><a href="{{ url_for('releases.preview_pdf', release_id=release.id) }}" target="_blank">PDF をプレビューする</a></p>
+{% endblock %}

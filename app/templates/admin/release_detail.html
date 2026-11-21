@@ -8,7 +8,7 @@
 <p>状態：{{ release.status|status_label }}　／　会社：{{ release.user.company_name }}（{{ release.user.contact_name }}　{{ release.user.email }}）</p>
 {% if release.status == 'rejected' %}<p class="error">差し戻しの理由：{{ release.reject_reason }}</p>{% endif %}
 {% if release.status == 'approved' %}
-  <p>承認日時（UTC）：{{ release.approved_at.strftime('%Y-%m-%d %H:%M') }}　<a href="{{ url_for('admin.download', release_id=release.id) }}">Word をダウンロード</a></p>
+  <p>承認日時（UTC）：{{ release.approved_at.strftime('%Y-%m-%d %H:%M') }}　<a href="{{ url_for('admin.download', release_id=release.id) }}">PDF をダウンロード</a></p>
 {% endif %}
 
 {% if release.user.service_profile %}
@@ -84,10 +84,12 @@
 {% endif %}
 
 <h2>承認・差し戻し</h2>
-<p><a href="{{ url_for('admin.preview_docx', release_id=release.id) }}">Word の仮出力を見る（保存・承認はされません）</a></p>
+<p><a href="{{ url_for('admin.preview_pdf', release_id=release.id) }}" target="_blank">PDF のプレビューを見る（保存・承認はされません）</a></p>
+{% if pdf_pages == 1 %}<p class="field-hint">A4 1枚に収まっています。</p>
+{% elif pdf_pages %}<p class="error">A4 1枚に収まっていません（{{ pdf_pages }}ページ）。文章を短くしてください。</p>{% endif %}
 <form action="{{ url_for('admin.approve', release_id=release.id) }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  <button type="submit">承認して Word を出力する</button>
+  <button type="submit">承認して PDF を出力する</button>
 </form>
 <form action="{{ url_for('admin.reject', release_id=release.id) }}" method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

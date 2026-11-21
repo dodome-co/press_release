@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "auth/_field.html" import field %}
+{% block title %}管理者ログイン{% endblock %}
+{% block content %}
+<h1>管理者ログイン</h1>
+<p>運営者（管理者）専用のログインです。クライアントの方は、<a href="{{ url_for('auth.login') }}">こちらからログイン</a>してください。</p>
+<form method="post" novalidate>
+  {{ form.hidden_tag() }}
+  {{ field(form.email, type="email", autocomplete="username") }}
+  {{ field(form.password, autocomplete="current-password") }}
+  <button type="submit">管理者としてログイン</button>
+</form>
+{% endblock %}

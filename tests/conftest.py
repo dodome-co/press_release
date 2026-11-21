@@ -69,7 +69,10 @@ def admin_user(app):
 
 
 def login(client, email, password="password123"):
-    return client.post("/login", data={"email": email, "password": password}, follow_redirects=False)
+    """ログインする。管理者のアカウントは、管理者の専用ログイン（/admin/login）から入る。"""
+    user = User.query.filter_by(email=email).first()
+    path = "/admin/login" if user is not None and user.is_admin else "/login"
+    return client.post(path, data={"email": email, "password": password}, follow_redirects=False)
 
 
 def png_bytes(size=(40, 30), color=(30, 120, 200)):

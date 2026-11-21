@@ -1,7 +1,7 @@
 import io
 
 import pytest
-from docx import Document
+from pypdf import PdfReader
 
 from app import demo, payments
 from app.extensions import db
@@ -68,17 +68,18 @@ def test_cli_prints_accounts_and_password(demo_app):
         assert expected in res.output
 
 
-def test_client1_has_approved_release_with_word_and_photos(demo_app):
+def test_client1_has_approved_release_with_pdf_and_photos(demo_app):
     _seed()
     user = User.query.filter_by(email="demo-client1@example.com").one()
     release = Release.query.filter_by(user_id=user.id).one()
     assert release.status == "approved" and release.summary and release.approved_by
     assert [p.position for p in release.photos] == [1, 2] and len(release.schedule_items) == 3
-    word = resolve_path(release.file_path)
-    assert word.is_file()
-    text = "\n".join(p.text for p in Document(str(word)).paragraphs)
+    pdf = resolve_path(release.file_path)
+    assert pdf.is_file() and pdf.suffix == ".pdf"
+    reader = PdfReader(str(pdf))
+    text = "".join(page.extract_text() for page in reader.pages).replace(" ", "")
     assert "いわて栗ようかん" in text and "株式会社いわて菓子工房" in text and "岩手県" in text
-    assert len(Document(str(word)).inline_shapes) == 3  # ロゴ＋写真2枚
+    assert len(reader.pages) == 1 and sum(len(p.images) for p in reader.pages) == 3  # A4 1枚。ロゴ＋写真2枚
     assert user.service_profile is not None and user.logo_path
 
 

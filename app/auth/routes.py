@@ -78,10 +78,20 @@ LOGIN_LIMIT_MESSAGE = "ログインの試行が多すぎます。しばらく（
 TOO_MANY_MESSAGE = "操作が多すぎます。しばらくたってから、もう一度お試しください。"
 
 
-@bp.route("/login", methods=["GET", "POST"])
-def login():
+ADMIN_HINT = "管理者の方は、管理者用のログイン（/admin/login）からお入りください。"
+
+
+def _login(*, admin_only: bool):
+    """ログイン（クライアント用と、管理者用の2つの入口）。
+
+    - 管理者用（admin_only=True）：管理者のアカウントだけが入れる。クライアントのアカウントは、
+      パスワードが合っていても入れず、エラーの文言は「違います」とだけ出す（管理者かどうかを明かさない）。
+    - クライアント用：管理者のアカウントは、専用の入口を案内して、入れない。
+    """
+    template = "auth/admin_login.html" if admin_only else "auth/login.html"
+    home = "admin.index_page" if admin_only else "main.index"
     if current_user.is_authenticated:
-        return redirect(url_for("main.index"))
+        return redirect(url_for("admin.index_page" if current_user.is_admin else "main.index"))
     form = LoginForm()
     if form.validate_on_submit():
         email = User.normalize_email(form.email.data)
@@ -90,19 +100,37 @@ def login():
         # メールアドレスが登録されているかどうかで、結果が変わらないようにする（登録の有無を知られないように）
         if ratelimit.is_limited(ip_limit, ratelimit.client_ip()) or ratelimit.is_limited(fail_limit, email):
             flash(LOGIN_LIMIT_MESSAGE, "error")
-            return render_template("auth/login.html", form=form), 429
+            return render_template(template, form=form), 429
         ratelimit.record(ip_limit, ratelimit.client_ip())
         user = User.query.filter_by(email=email).first()
         if user is None:
             _dummy_check(form.password.data)  # 登録の有無が応答時間で分からないようにする
         if user is not None and user.check_password(form.password.data):
+            if admin_only and not user.is_admin:
+                ratelimit.record(fail_limit, email)  # クライアントのアカウントでは、管理者の入口から入れない
+                flash("メールアドレスまたはパスワードが違います。", "error")
+                return render_template(template, form=form)
+            if not admin_only and user.is_admin:
+                flash(ADMIN_HINT, "error")  # パスワードが合った人にだけ、案内する
+                return render_template(template, form=form)
             ratelimit.clear(fail_limit, email)  # ログインできたら、失敗の記録は消す
             login_user(user)
             next_url = request.args.get("next")
-            return redirect(next_url if _is_safe_next(next_url) else url_for("main.index"))
+            return redirect(next_url if _is_safe_next(next_url) else url_for(home))
         ratelimit.record(fail_limit, email)
         flash("メールアドレスまたはパスワードが違います。", "error")
-    return render_template("auth/login.html", form=form)
+    return render_template(template, form=form)
+
+
+@bp.route("/login", methods=["GET", "POST"])
+def login():
+    return _login(admin_only=False)
+
+
+@bp.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    """管理者の専用ログイン。"""
+    return _login(admin_only=True)
 
 
 @bp.post("/logout")

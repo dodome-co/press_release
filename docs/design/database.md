@@ -45,7 +45,7 @@ erDiagram
         text summary "要旨（前文）"
         string status "draft / pending / approved / rejected"
         int approved_by FK
-        string file_path "Word"
+        string file_path "PDF"
     }
     release_photos {
         int id PK
@@ -147,7 +147,7 @@ stateDiagram-v2
 | --- | --- |
 | `draft` | 下書き。管理者には見えない |
 | `pending` | 承認待ち |
-| `approved` | 承認済み。Word を出力済みで、以後は編集できない |
+| `approved` | 承認済み。PDF を出力済み。承認後も、ダウンロードの前なら、クライアントが内容を修正できる（PDF が作り直される） |
 | `rejected` | 差し戻し |
 
 ### 3-2. 注文（orders.status と orders.progress）
@@ -182,7 +182,7 @@ stateDiagram-v2
 
 | テーブル | 動き |
 | --- | --- |
-| password_reset_tokens、releases、service_profiles | 会員と一緒に消える（`ON DELETE CASCADE`）。写真と Word のファイルも消す |
+| password_reset_tokens、releases、service_profiles | 会員と一緒に消える（`ON DELETE CASCADE`）。写真と PDF のファイルも消す |
 | release_photos、release_schedule_items、release_edits、ai_chat_messages | 書類と一緒に消える（CASCADE） |
 | orders | 消さずに残す。`user_id` を空にし（`SET NULL`）、素材のリンクと納品物を消す。金額・日付・状態は残す |
 | order_checkout_sessions、order_refunds | 注文と一緒に残る |
@@ -209,7 +209,7 @@ stateDiagram-v2
 | mobile_phone | 文字列(20) | | 携帯電話番号 |
 | logo_path | 文字列(500) | | ロゴ画像の保存場所 |
 | department | 文字列(100) | | 担当部署 |
-| founded / capital / employees | 文字列(50) | | 設立・資本金・従業員数（Word の会社概要に載せる） |
+| founded / capital / employees | 文字列(50) | | 設立・資本金・従業員数（PDF の会社概要に載せる） |
 | business_description | テキスト | | 事業内容 |
 | website_url | 文字列(500) | | ウェブサイト |
 | created_at / updated_at | 日時 | ○ | |
@@ -231,14 +231,14 @@ stateDiagram-v2
 | --- | --- | --- | --- |
 | id | 整数 | ○ | 主キー |
 | user_id | 整数 | ○ | → users.id（CASCADE）、インデックス |
-| title | 文字列(200) | ○ | タイトル（全角22文字以内。Word には、このタイトルだけを載せる）。**管理者が決める**（クライアントは入力しない）。空でも提出できるが、承認には要る |
+| title | 文字列(200) | ○ | タイトル（全角22文字以内。PDF には、このタイトルだけを載せる）。**管理者が決める**（クライアントは入力しない）。空でも提出できるが、承認には要る |
 | subtitle | 文字列(200) | | サブタイトル。AI がまとめ、管理者が直す |
 | speakers | テキスト | | 当日の対応者（1行に1人、肩書と名前）。AI がまとめ、管理者が直す |
 | title_candidates | テキスト | | AI が出したタイトルの案（1行に1つ。2〜3個）。管理者が選ぶ |
 | event_date | 日付 | | 取材会の日付（提出時は必須） |
 | event_start_time / event_end_time | 時刻 | | 開始・終了時刻（終了は任意） |
 | location | 文字列(300) | ○ | 場所 |
-| service_description | テキスト | ○ | AI がチャットで集めた「サービスや商品の内容」。**画面には出さず**、管理者が確かめる材料にする（Word には載せない） |
+| service_description | テキスト | ○ | AI がチャットで集めた「サービスや商品の内容」。**画面には出さず**、管理者が確かめる材料にする（PDF には載せない） |
 | feature_1 / feature_2 / feature_3 | 文字列(200) | ○ | 特徴（空文字で「なし」） |
 | application_method | テキスト | ○ | （使わない）取材の申込方法。記者は申し込みを嫌うため、聞かない・載せない。過去のデータのために、列だけ残す |
 | application_deadline_at | 日時 | | （使わない）申込の締切。列だけ残す |
@@ -250,10 +250,10 @@ stateDiagram-v2
 | submitted_at | 日時 | | 最後に提出した日時 |
 | reject_reason | テキスト | | 差し戻しの理由 |
 | approved_by | 整数 | | → users.id（SET NULL）。承認した管理者 |
-| approved_at | 日時 | | 承認日時（Word の発信日） |
+| approved_at | 日時 | | 承認日時（PDF の発信日） |
 | last_edited_by | 整数 | | → users.id（SET NULL） |
 | last_edited_at | 日時 | | |
-| file_path | 文字列(500) | | 出力した Word の保存場所 |
+| file_path | 文字列(500) | | 出力した PDF の保存場所 |
 | created_at / updated_at | 日時 | ○ | |
 
 ### 5-4. release_photos（書類の写真）
@@ -271,7 +271,7 @@ stateDiagram-v2
 
 ### 5-5. release_schedule_items（当日のスケジュール。現在は使わない）
 
-画面にも Word にも出さない（当日の流れは、要旨と、日時・会場の説明で伝える）。過去のデータのために、テーブルだけ残す。
+画面にも PDF にも出さない（当日の流れは、要旨と、日時・会場の説明で伝える）。過去のデータのために、テーブルだけ残す。
 
 | 列 | 型 | 必須 | 制約・メモ |
 | --- | --- | --- | --- |

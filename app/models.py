@@ -187,7 +187,7 @@ class Release(db.Model):
     approved_at = db.Column(db.DateTime, nullable=True)
     last_edited_by = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     last_edited_at = db.Column(db.DateTime, nullable=True)
-    file_path = db.Column(db.String(500), nullable=True)  # 承認時に出力した Word
+    file_path = db.Column(db.String(500), nullable=True)  # 承認時に出力した PDF
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(db.DateTime, nullable=False, default=utcnow, onupdate=utcnow)
 

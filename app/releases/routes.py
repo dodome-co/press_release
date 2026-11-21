@@ -4,10 +4,10 @@ from flask_login import current_user
 from .. import ai, ratelimit
 from ..auth.decorators import client_required
 from ..extensions import db
-from ..models import MAX_PHOTOS, Release, ReleasePhoto
+from ..models import MAX_PHOTOS, RELEASE_APPROVED, Release, ReleasePhoto
 from ..uploads import UploadError
 from . import bp, chat, notifications, service
-from .forms import ReleaseForm
+from .forms import AdminReleaseForm, ReleaseForm
 
 
 def _owned_release_or_404(release_id: int) -> Release:
@@ -170,8 +170,52 @@ def delete(release_id):
 @bp.get("/<int:release_id>/download")
 @client_required
 def download(release_id):
-    """承認された書類の Word をダウンロードする（承認前は 404）。"""
-    from ..admin import send_approved_docx
+    """承認された書類の PDF をダウンロードする（承認前は 404）。"""
+    from ..admin import send_approved_pdf
 
     release = _owned_release_or_404(release_id)
-    return send_approved_docx(release)
+    return send_approved_pdf(release)
+
+
+@bp.get("/<int:release_id>/preview.pdf")
+@client_required
+def preview_pdf(release_id):
+    """いまの内容で作った PDF を、ブラウザで開く（プレビュー）。保存はしない。"""
+    from .. import pdfgen
+    from ..admin import pdf_response
+
+    release = _owned_release_or_404(release_id)
+    try:
+        rendered = pdfgen.render_release(release)
+    except Exception:
+        current_app.logger.exception("プレビューの PDF を作れませんでした（書類ID=%s）", release.id)
+        flash("PDF を作れませんでした。", "error")
+        return redirect(url_for("releases.view", release_id=release.id))
+    return pdf_response(rendered.data, f"press_release_{release.id}_preview.pdf", inline=True)
+
+
+@bp.route("/<int:release_id>/revise", methods=["GET", "POST"])
+@client_required
+def revise(release_id):
+    """承認されたあと、ダウンロードする前に、内容を直す。直すと、PDF が作り直される。"""
+    from .. import pdfgen
+
+    release = _owned_release_or_404(release_id)
+    if release.status != RELEASE_APPROVED:
+        abort(404)
+    form = AdminReleaseForm(obj=release if request.method == "GET" else None)
+    if request.method == "POST" and form.validate_on_submit():
+        values = {name: getattr(form, name).data for name in service.ADMIN_FIELDS}
+        try:
+            changed = service.client_revise(release, current_user, values, form.summary.data)
+        except service.ReleaseError as e:
+            flash(str(e), "error")
+            return redirect(url_for("releases.revise", release_id=release.id))
+        flash("直しました。PDF を作り直しました。" if changed else "変更はありませんでした。", "success")
+        return redirect(url_for("releases.view", release_id=release.id))
+    pages = None
+    try:
+        pages = pdfgen.render_release(release).pages
+    except Exception:
+        current_app.logger.exception("PDF のページ数を数えられませんでした（書類ID=%s）", release.id)
+    return render_template("releases/revise.html", release=release, form=form, pdf_pages=pages)

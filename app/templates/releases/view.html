@@ -3,10 +3,15 @@
 {% block content %}
 <h1>プレビュー</h1>
 <p>状態：{{ release.status|status_label }}</p>
-<p>※これは入力内容の確認用です。内容は、管理者（元記者）が確認して、直してから承認します。Word は、承認のときに作られます。</p>
+<p>※これは入力内容の確認用です。内容は、管理者（元記者）が確認して、直してから承認します。PDF は、承認のときに作られます。</p>
 
 {% if release.status == 'approved' %}
-  <p><a href="{{ url_for('releases.download', release_id=release.id) }}">Word をダウンロードする</a></p>
+  <h3>承認されました。ダウンロードの前に、仕上がりを確かめて、必要なら直してください。</h3>
+  <ol>
+    <li><a class="button secondary" href="{{ url_for('releases.preview_pdf', release_id=release.id) }}" target="_blank">PDF をプレビューする</a></li>
+    <li><a class="button secondary" href="{{ url_for('releases.revise', release_id=release.id) }}">内容を修正する</a>（直すと、PDF が作り直されます）</li>
+    <li><a class="button" href="{{ url_for('releases.download', release_id=release.id) }}">PDF をダウンロードする</a></li>
+  </ol>
   <p>次は、記者クラブへの<a href="{{ url_for('guide.index') }}">投げ込みのしかた</a>をご覧ください。</p>
   {% if admin_changes %}
   <h3>管理者が修正した内容</h3>
@@ -17,6 +22,7 @@
   </ul>
   {% endif %}
 {% elif release.status == 'pending' %}
+  <p><a href="{{ url_for('releases.preview_pdf', release_id=release.id) }}" target="_blank">いまの内容で、PDF のプレビューを見る</a></p>
   <p>承認までの目安は、{{ target_days }}営業日以内です。承認待ちの間は、編集できません。</p>
 {% elif release.status == 'rejected' and release.reject_reason %}
   <p class="error">差し戻しの理由：{{ release.reject_reason }}</p>

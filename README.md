@@ -20,10 +20,10 @@ uv run pytest                # テストを実行
 - `app/` … アプリ本体（Flask）。`config.py` で開発/本番/テストの設定を切り替える
 - `app/auth/` … 認証（会員登録・ログイン・パスワード再設定・アクセス制御）
 - `app/releases/` … 書類（クライアントの入力・提出）、`app/admin.py` … 管理者の確認・編集・承認
-- `app/docgen.py` … Word の出力、`app/uploads.py` … 画像のアップロード（検証・保存）
+- `app/pdfgen.py` … PDF の出力（A4 1枚。日本語フォントを埋め込む。フォントは `app/fonts/`）、`app/uploads.py` … 画像のアップロード（検証・保存）
 - `migrations/` … データベース変更の記録（Flask-Migrate）
 - `app/templates/` … 画面（HTML）の雛形
-- `templates/press_release.docx` … Word の雛形（仕様書 F26）。Word で見た目を整えてよい。作り直すときは `uv run python scripts/make_template.py`（Word で手を入れた内容は消える）
+- PDF の見た目を変えるときは、`app/pdfgen.py`（レイアウト）を直す。日本語フォントは BIZ UDPゴシック（OFL。`app/fonts/OFL.txt`）
 - `tests/` … テスト
 
 ## 本番の設定（必須）

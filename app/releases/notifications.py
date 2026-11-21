@@ -42,7 +42,7 @@ def notify_approved(release: Release) -> None:
     """承認されたことを、クライアントに知らせる（F23）。管理者が編集した場合は、変更点を載せる。"""
     link = external_url("releases.view", release_id=release.id)
     body = (
-        f"「{release.title}」が承認されました。Word をダウンロードできます。\n{link}\n"
+        f"「{release.title}」が承認されました。PDF のプレビューと修正、ダウンロードができます。\n{link}\n"
     )
     changes = _changes_text(release)
     if changes:
