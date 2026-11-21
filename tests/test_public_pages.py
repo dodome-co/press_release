@@ -161,7 +161,7 @@ def test_services_for_visitors_show_everything_but_no_order_forms(client):
     for expected in ("記者発表会の企画・当日の同席", "岩手県内：80,000円", "投げ込み交渉代行", "3,000円",
                      "10,000円", "10,000円〜", "キャンセル・返金について", "リリース作成以外のサービスは、面談が必須となります。"):
         assert expected in body, expected
-    assert "申し込んで支払う" not in body and 'name="option"' not in body and "csrf_token" not in body
+    assert '<button type="submit">申し込む</button>' not in body and 'name="option"' not in body and "csrf_token" not in body
 
 
 def test_top_page_explains_what_a_press_release_is(client):
@@ -198,13 +198,13 @@ def test_release_slot_explanation_for_visitors(client):
 def test_services_for_admins_are_read_only(admin_client):
     body = admin_client.get("/services").get_data(as_text=True)
     assert "記者発表会の企画・当日の同席" in body
-    assert "申し込んで支払う" not in body and "会員登録して申し込む" not in body
+    assert '<button type="submit">申し込む</button>' not in body and "会員登録して申し込む" not in body
 
 
 def test_services_for_clients_still_have_order_forms(client, client_user):
     login(client, "client@example.com")
     body = client.get("/services").get_data(as_text=True)
-    assert body.count("申し込んで支払う") == 4  # 無料の枠が残っている間は、リリース作成の追加以外の4つ
+    assert body.count('<button type="submit">申し込む</button>') == 4  # 無料の枠が残っている間は、リリース作成の追加以外の4つ
     assert "会員登録して申し込む" not in body
 
 
