@@ -106,7 +106,7 @@ def test_client2_has_a_release_waiting_for_approval(demo_app):
     assert release.status == "pending" and release.file_path is None
     # AI がまとめた内容（要旨・サブタイトル・当日の対応者・タイトルの案）と、チャットのやりとりが入っている
     assert release.summary.endswith("ご案内申し上げます。") and release.summary_source == "ai_assisted"
-    assert release.subtitle and len(release.speaker_list) == 2 and len(release.title_candidate_list) == 3
+    assert release.subtitle and len(release.speaker_list) == 2 and len(release.title_options) == 3 and release.features_heading == "商品の特徴"
     assert [m.role for m in release.chat_messages] == ["ai", "client", "ai", "client", "ai"]
     assert len(release.photos) == 2
     paid_slot = Order.query.filter_by(user_id=user.id, service_type="release_creation").one()
@@ -270,9 +270,7 @@ def test_reset_leaves_no_orphan_files(demo_app):
     assert Order.query.count() == 0 and Release.query.count() == 0 and ReleasePhoto.query.count() == 0
 
 
-def test_seeded_titles_fit_on_one_line_in_word(demo_app):
-    from app.textutil import display_width
-
+def test_seeded_titles_are_short(demo_app):
+    """タイトルの字数の制限は、ないが、短めにする（デモのサンプルも、短め）。"""
     _seed()
-    limit = demo_app.config["TITLE_MAX_WIDTH"]
-    assert all(display_width(r.title) <= limit for r in Release.query.filter(Release.status != "draft"))
+    assert all(len(r.title) <= 30 for r in Release.query.filter(Release.status != "draft"))

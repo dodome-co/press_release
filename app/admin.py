@@ -123,6 +123,16 @@ def delete_photo(release_id, photo_id):
     return redirect(url_for("admin.release_detail", release_id=release.id))
 
 
+@bp.post("/releases/<int:release_id>/title-options/<int:index>")
+@admin_required
+def apply_title_option(release_id, index):
+    """AI の、タイトルとサブタイトルのセットの案を、使う。"""
+    release = _release_or_404(release_id)
+    if _guard(lambda: service.admin_apply_title_option(release, current_user, index)):
+        flash("この案を、タイトルとサブタイトルに入れました。", "success")
+    return redirect(url_for("admin.release_detail", release_id=release.id))
+
+
 @bp.post("/releases/<int:release_id>/approve")
 @admin_required
 def approve(release_id):

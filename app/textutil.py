@@ -16,17 +16,6 @@ def clean_text(value: str | None) -> str:
     return _INVALID_XML.sub("", text).strip()
 
 
-def display_width(text: str | None) -> float:
-    """全角を1、半角を0.5として数えた「全角換算の文字数」。
-
-    Word のタイトルは1行に収めたいので、全角換算で長さを決める。
-    """
-    total = 0.0
-    for ch in text or "":
-        total += 1.0 if unicodedata.east_asian_width(ch) in ("W", "F") else 0.5
-    return total
-
-
 def is_safe_http_url(url: str | None, max_length: int = 500) -> bool:
     """http(s) で始まる、ホスト名のある URL か。空白・改行・制御文字・ユーザー情報（user:pw@）は不可。"""
     from urllib.parse import urlsplit

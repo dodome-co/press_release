@@ -160,7 +160,10 @@ class Release(db.Model):
     title = db.Column(db.String(200), nullable=False, default="")  # 管理者が決める（AI の案は title_candidates）
     subtitle = db.Column(db.String(200), nullable=True)  # サブタイトル（AI がまとめ、管理者が直す）
     speakers = db.Column(db.Text, nullable=True)  # 当日の対応者（1行に1人）
-    title_candidates = db.Column(db.Text, nullable=True)  # AI が出したタイトルの案（1行に1つ。管理者が選ぶ）
+    # AI が出した、タイトルとサブタイトルのセットの案（JSON の配列：[{"title": ..., "subtitle": ...}, ...]。管理者が選ぶ）
+    title_candidates = db.Column(db.Text, nullable=True)
+    # 特徴の見出し（題材に合わせて、AI が決める。例：「アプリの特徴」「施設の特徴」「商品の特徴」）
+    features_heading = db.Column(db.String(50), nullable=True)
     event_date = db.Column(db.Date, nullable=True)  # 取材会の日付
     event_start_time = db.Column(db.Time, nullable=True)  # 開始時刻
     event_end_time = db.Column(db.Time, nullable=True)  # 終了時刻（任意）
@@ -233,8 +236,24 @@ class Release(db.Model):
         return [line.strip() for line in (self.speakers or "").splitlines() if line.strip()]
 
     @property
-    def title_candidate_list(self) -> list[str]:
-        return [line.strip() for line in (self.title_candidates or "").splitlines() if line.strip()]
+    def title_options(self) -> list[dict]:
+        """AI が出した、タイトルとサブタイトルのセット（[{"title", "subtitle"}, ...]）。"""
+        import json
+
+        raw = (self.title_candidates or "").strip()
+        if not raw:
+            return []
+        try:
+            data = json.loads(raw)
+            return [{"title": str(o.get("title", "")).strip(), "subtitle": str(o.get("subtitle", "")).strip()}
+                    for o in data if isinstance(o, dict) and str(o.get("title", "")).strip()]
+        except ValueError:  # 古い形（1行に1つのタイトルだけ）
+            return [{"title": line.strip(), "subtitle": ""} for line in raw.splitlines() if line.strip()]
+
+    @property
+    def features_heading_text(self) -> str:
+        """PDF と画面に出す、特徴の見出し。決まっていなければ、「特徴」。"""
+        return (self.features_heading or "").strip() or "特徴"
 
     @property
     def features(self) -> list[str]:

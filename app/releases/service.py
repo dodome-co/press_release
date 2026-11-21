@@ -163,14 +163,6 @@ def create_draft(user) -> Release:
     return release
 
 
-def _check_title(title: str | None) -> None:
-    from .forms import title_length_error
-
-    message = title_length_error(title)
-    if message:
-        _fail(message)
-
-
 def update_fields(release: Release, values: dict) -> None:
     """入力項目を更新する（クライアント用）。画面の保存処理が commit する。"""
     _lock_editable(release)
@@ -276,7 +268,7 @@ def submit(release: Release) -> None:
 # ---- 管理者の操作（承認待ちの書類だけ） ----
 ADMIN_FIELDS = (
     "title", "subtitle", "event_date", "event_start_time", "event_end_time", "location",
-    "feature_1", "feature_2", "feature_3", "speakers",
+    "features_heading", "feature_1", "feature_2", "feature_3", "speakers",
 )
 FIELD_LABELS = {
     **REQUIRED_FOR_SUBMIT,
@@ -285,6 +277,7 @@ FIELD_LABELS = {
     "feature_2": "特徴2",
     "feature_3": "特徴3",
     "subtitle": "サブタイトル",
+    "features_heading": "特徴の見出し",
     "speakers": "当日の対応者",
     "summary": "要旨（前文）",
     "photos": "写真",
@@ -301,8 +294,6 @@ def _record_edit(release: Release, admin, field: str, old: str | None, new: str 
 
 def _apply_edits(release: Release, editor, values: dict, summary: str) -> list[str]:
     """項目を直す。変わった項目だけを、編集履歴に残し、変えた項目名の一覧を返す（commit は呼び出し側）。"""
-    if "title" in values:
-        _check_title(values["title"])
     changed: list[str] = []
 
     def apply(field: str, new_value) -> None:
@@ -329,6 +320,18 @@ def admin_update(release: Release, admin, values: dict, summary: str) -> list[st
     """管理者が書類を編集する（承認待ちの書類だけ）。変えた項目名の一覧を返す。"""
     _lock_pending(release)
     changed = _apply_edits(release, admin, values, summary)
+    db.session.commit()
+    return changed
+
+
+def admin_apply_title_option(release: Release, admin, index: int) -> list[str]:
+    """AI の、タイトルとサブタイトルのセットの案を、そのまま使う（承認待ちの書類だけ）。変えた項目名の一覧を返す。"""
+    _lock_pending(release)
+    options = release.title_options
+    if not 0 <= index < len(options):
+        _fail("その案は、ありません。")
+    option = options[index]
+    changed = _apply_edits(release, admin, {"title": option["title"], "subtitle": option["subtitle"]}, release.summary or "")
     db.session.commit()
     return changed
 

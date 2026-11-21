@@ -3,15 +3,6 @@ from flask_wtf import FlaskForm
 from wtforms import DateField, StringField, TextAreaField, TimeField
 from wtforms.validators import Length, Optional, ValidationError
 
-from ..textutil import clean_text, display_width
-
-
-def title_length_error(title: str | None) -> str | None:
-    """タイトルが長すぎるときのメッセージ（問題なければ None）。"""
-    limit = current_app.config["TITLE_MAX_WIDTH"]
-    if display_width(clean_text(title)) > limit:
-        return f"タイトルは全角{limit}文字以内で入力してください（半角は2文字で全角1文字として数えます）。"
-    return None
 
 
 class ReleaseForm(FlaskForm):
@@ -40,15 +31,11 @@ class ReleaseForm(FlaskForm):
 class AdminReleaseForm(ReleaseForm):
     """管理者の編集。AI がまとめた内容を、確かめて、直す。"""
 
-    title = StringField("タイトル（全角22文字以内）", validators=[Length(max=200)])
+    title = StringField("タイトル（短めに）", validators=[Length(max=200)])
     subtitle = StringField("サブタイトル", validators=[Length(max=200)])
     summary = TextAreaField("要旨（前文）", validators=[Length(max=2000)])
     speakers = TextAreaField("当日の対応者（1行に1人。肩書と名前）", validators=[Length(max=1000)])
+    features_heading = StringField("特徴の見出し（例：アプリの特徴、施設の特徴）", validators=[Length(max=50)])
     feature_1 = StringField("特徴1", validators=[Length(max=200)])
     feature_2 = StringField("特徴2", validators=[Length(max=200)])
     feature_3 = StringField("特徴3", validators=[Length(max=200)])
-
-    def validate_title(self, field):
-        message = title_length_error(field.data)
-        if message:
-            raise ValidationError(message)
