@@ -8,7 +8,6 @@ from .auth.decorators import admin_required
 from .extensions import db
 from .models import (
     MAX_PHOTOS,
-    MAX_SCHEDULE_ITEMS,
     RELEASE_APPROVED,
     RELEASE_PENDING,
     RELEASE_STATUSES,
@@ -16,16 +15,10 @@ from .models import (
     ReleasePhoto,
 )
 from .releases import notifications, service
-from .releases.forms import ReleaseForm
+from .releases.forms import AdminReleaseForm
 from .uploads import UploadError, resolve_path
-from wtforms import TextAreaField
-from wtforms.validators import Length
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
-
-
-class AdminReleaseForm(ReleaseForm):
-    summary = TextAreaField("要旨（前文）", validators=[Length(max=2000)])
 
 
 def _release_or_404(release_id: int) -> Release:
@@ -64,7 +57,6 @@ def release_detail(release_id):
     release = _release_or_404(release_id)
     editable = release.status == RELEASE_PENDING
     form = AdminReleaseForm(obj=release if request.method == "GET" else None)
-    schedule = [(i.time_text, i.content) for i in release.schedule_items]
     if request.method == "POST":
         if not editable:
             flash("承認待ちの書類だけ、編集できます。", "error")
@@ -72,21 +64,16 @@ def release_detail(release_id):
         if form.validate_on_submit():
             values = {name: getattr(form, name).data for name in service.ADMIN_FIELDS}
             try:
-                changed = service.admin_update(
-                    release, current_user, values, form.schedule_rows(), form.summary.data
-                )
+                changed = service.admin_update(release, current_user, values, form.summary.data)
             except service.ReleaseError as e:
                 flash(str(e), "error")
                 return redirect(url_for("admin.release_detail", release_id=release.id))
             flash("保存しました。" if changed else "変更はありませんでした。", "success")
             return redirect(url_for("admin.release_detail", release_id=release.id))
-        schedule = form.schedule_rows()
-    schedule = (list(schedule) + [("", "")] * MAX_SCHEDULE_ITEMS)[:MAX_SCHEDULE_ITEMS]
     return render_template(
         "admin/release_detail.html",
         release=release,
         form=form,
-        schedule=schedule,
         editable=editable,
         max_photos=MAX_PHOTOS,
     )

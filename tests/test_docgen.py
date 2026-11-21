@@ -41,10 +41,41 @@ def _storage(data=None):
 def test_basic_fields_are_filled(app, client_user):
     text = _text(_doc(_release(client_user)))
     for expected in ("報道関係者各位", f"【取材のお願い】{FULL['title']}", "要旨です。", "2026年12月1日（火） 14:00〜16:00",
-                     FULL["location"], FULL["service_description"], "・速い", FULL["application_method"],
-                     "2026年11月28日（土） 17:00まで", "ご来場が難しくなった場合は、お問い合わせ先までご連絡ください", "株式会社テスト",
+                     FULL["location"], "◆ 商品の特徴", "・速い", "株式会社テスト",
                      "〒123-4567 東京都千代田区1-1-1", "TEL：03-1234-5678", "E-mail：client@example.com"):
         assert expected in text, expected
+
+
+def test_word_has_no_application_schedule_or_description(app, client_user):
+    """よいプレスリリースの定義：取材の申し込み、当日のスケジュール、サービスの概要は、載せない。"""
+    r = _release(client_user)
+    r.schedule_items.append(ReleaseScheduleItem(position=1, time_text="14:00", content="説明"))
+    db.session.commit()
+    text = _text(_doc(r))
+    for gone in ("取材のお申し込み", "ご来場が難しくなった場合", "締切", "当日のスケジュール", "◆ サービスの内容",
+                 FULL["service_description"], FULL["application_method"], "14:00 説明"):
+        assert gone not in text, gone
+
+
+def test_subtitle_and_speakers_are_shown(app, client_user):
+    r = _release(client_user, subtitle="地域の農家と連携", speakers="社長　岩手　盛子\n栗生産者　花巻　賢治")
+    doc = _doc(r)
+    text = _text(doc)
+    for expected in ("～地域の農家と連携～", "◆ 当日の対応者", "社長　岩手　盛子", "栗生産者　花巻　賢治"):
+        assert expected in text, expected
+    lines = text.splitlines()
+    assert lines.index(f"【取材のお願い】{FULL['title']}") < lines.index("～地域の農家と連携～") < lines.index("要旨です。")
+    assert lines.index("◆ 日時・会場") < lines.index("◆ 当日の対応者") < lines.index("◆ 商品の特徴")
+
+
+def test_subtitle_and_speakers_are_omitted_when_empty(app, client_user):
+    text = _text(_doc(_release(client_user)))
+    assert "◆ 当日の対応者" not in text and "～～" not in text
+
+
+def test_features_heading_is_omitted_without_features(app, client_user):
+    text = _text(_doc(_release(client_user, feature_1="", feature_2="", feature_3="")))
+    assert "◆ 商品の特徴" not in text
 
 
 def test_no_leftover_template_tags(app, client_user):
@@ -54,7 +85,6 @@ def test_no_leftover_template_tags(app, client_user):
 
 def test_empty_sections_are_omitted(app, client_user):
     text = _text(_doc(_release(client_user)))
-    assert "当日のスケジュール" not in text  # スケジュールなし
     assert "◆ 写真" not in text  # 写真なし
     assert "携帯" not in text  # 携帯電話番号なし
     for label in ("設立：", "資本金：", "従業員数：", "事業内容：", "URL："):
@@ -66,11 +96,8 @@ def test_optional_parts_shown_when_present(app):
                      capital="1,000万円", employees="25名", business_description="ソフト開発",
                      website_url="https://example.com", department="広報部")
     r = _release(user)
-    r.schedule_items.append(ReleaseScheduleItem(position=1, time_text="14:00", content="説明"))
-    r.schedule_items.append(ReleaseScheduleItem(position=2, time_text="15:00", content="デモ"))
-    db.session.commit()
     text = _text(_doc(r))
-    for expected in ("当日のスケジュール", "14:00", "デモ", "（携帯：090-1111-2222）", "設立：2015年4月",
+    for expected in ("（携帯：090-1111-2222）", "設立：2015年4月",
                      "資本金：1,000万円", "従業員数：25名", "事業内容：ソフト開発", "URL：https://example.com", "広報部"):
         assert expected in text, expected
 
@@ -136,7 +163,7 @@ def test_write_release_leaves_no_temp_files(app, client_user):
 def test_newlines_become_line_breaks_in_word(app, client_user):
     import zipfile
 
-    r = _release(client_user, service_description="1行目\n2行目")
+    r = _release(client_user, summary="1行目\n2行目")
     xml = zipfile.ZipFile(io.BytesIO(docgen.render_release(r))).read("word/document.xml").decode()
     assert "1行目</w:t><w:br/><w:t" in xml  # 改行が Word の改行になる
 

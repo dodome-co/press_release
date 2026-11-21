@@ -3,75 +3,52 @@
 {% block title %}書類の入力{% endblock %}
 {% block content %}
 <h1>書類の入力</h1>
-<p>状態：{{ release.status|status_label }}　<a href="{{ url_for('releases.view', release_id=release.id) }}">プレビューへ</a></p>
+<p>状態：{{ release.status|status_label }}</p>
 {% if release.status == 'rejected' and release.reject_reason %}
   <p class="error">差し戻しの理由：{{ release.reject_reason }}</p>
 {% endif %}
 
-<section class="chat" id="ai-chat"
-         data-url="{{ url_for('releases.chat_send', release_id=release.id) }}"
-         data-csrf="{{ csrf_token() }}">
-  <h2>AI と話して、内容を伝える</h2>
-  {% if ai_ready %}
-  <p>AI が、取材してほしいサービスや商品について、質問します。答えていくと、下の「サービスの内容」と「要旨の元になる情報」の欄に、自動で入ります。</p>
-  <ol class="chat-log" aria-live="polite">
-    <li class="chat-ai">{{ first_question }}</li>
-    {% for m in release.chat_messages %}
-    <li class="chat-{{ m.role }}">{{ m.content }}</li>
-    {% endfor %}
-  </ol>
-  <p class="chat-status" role="status"></p>
-  <form class="chat-form">
-    <label for="chat-message">あなたの答え</label><br>
-    <textarea id="chat-message" name="message" rows="3" maxlength="{{ config['INPUT_MAX_LENGTH'] }}"></textarea><br>
-    <button type="submit">送る</button>
-    <small>この書類で AI を使える残りの回数：<span class="chat-remaining">{{ chat_remaining }}</span>回</small>
-  </form>
-  <script src="{{ url_for('static', filename='js/chat.js') }}" defer></script>
-  {% else %}
-  <p>AI のチャットは、準備中です。下の欄に、直接入力してください。</p>
-  {% endif %}
-</section>
-
+<h2>1. 取材の日時と場所</h2>
 <form method="post" novalidate>
   {{ form.hidden_tag() }}
-  <h2>基本情報</h2>
-  {{ field(form.title, placeholder="全角22文字以内") }}
   {{ field(form.event_date) }}
   {{ field(form.event_start_time) }}
   {{ field(form.event_end_time) }}
   <p class="field-hint">取材は平日の、午前中か{{ latest_start_label }}までがおすすめです。</p>
   {{ field(form.location) }}
-
-  <h2>当日のスケジュール（任意・最大5行）</h2>
-  {% for e in form.schedule_errors %}<p class="error">{{ e }}</p>{% endfor %}
-  {% for time_text, content in schedule %}
-  <p>
-    <input type="text" name="schedule_time_{{ loop.index }}" value="{{ time_text }}" placeholder="時間（例：14:00〜14:20）" maxlength="50">
-    <input type="text" name="schedule_content_{{ loop.index }}" value="{{ content }}" placeholder="内容" maxlength="200">
-  </p>
-  {% endfor %}
-
-  <h2>サービスの内容</h2>
-  {{ field(form.service_description, rows=6) }}
-  {{ field(form.feature_1) }}
-  {{ field(form.feature_2) }}
-  {{ field(form.feature_3) }}
-
-  <h2>取材のお申し込み</h2>
-  {{ field(form.application_method, rows=3) }}
-  {{ field(form.application_deadline_at) }}
-
-  <h2>要旨の元になる情報（各500文字まで）</h2>
-  <p>管理者が、ここに書かれた内容をもとに、リリースの冒頭の文章（要旨）を作成します。</p>
-  {{ field(form.source_what, rows=4) }}
-  {{ field(form.source_why, rows=4) }}
-  {{ field(form.source_message, rows=4) }}
-
   <button type="submit">保存する</button>
 </form>
+<p class="field-hint">日時と場所を入れて「保存する」を押してから、下の AI とのチャットに進んでください。</p>
 
-<h2>写真（最大{{ max_photos }}枚）</h2>
+<section class="chat" id="ai-chat"
+         data-url="{{ url_for('releases.chat_send', release_id=release.id) }}"
+         data-csrf="{{ csrf_token() }}">
+  <h2>2. AI と話して、内容を伝える</h2>
+  {% if ai_ready %}
+  <p>AI が、取材してほしいサービスや商品について、質問します。答えていくと、AI が、プレスリリースの内容（特徴・要旨など）をまとめます。</p>
+  <div class="chat-window">
+    <ol class="chat-log" aria-live="polite">
+      <li class="chat-ai">{{ first_question }}</li>
+      {% for m in release.chat_messages %}
+      <li class="chat-{{ m.role }}">{{ m.content }}</li>
+      {% endfor %}
+    </ol>
+    <p class="chat-status" role="status"></p>
+    <form class="chat-form">
+      <label for="chat-message" class="visually-hidden">あなたの答え</label>
+      <textarea id="chat-message" name="message" rows="2" maxlength="{{ config['INPUT_MAX_LENGTH'] }}"
+                placeholder="ここに答えを入力（Enterで送信、Shift+Enterで改行）"></textarea>
+      <button type="submit">送る</button>
+    </form>
+    <p class="chat-meta">この書類で AI を使える残りの回数：<span class="chat-remaining">{{ chat_remaining }}</span>回</p>
+  </div>
+  <script src="{{ url_for('static', filename='js/chat.js') }}" defer></script>
+  {% else %}
+  <p>AI のチャットは、準備中です。</p>
+  {% endif %}
+</section>
+
+<h2>3. 写真（最大{{ max_photos }}枚）</h2>
 {% for photo in release.photos %}
   <div>
     <img src="{{ url_for('files.photo', photo_id=photo.id) }}" alt="{{ photo.original_filename }}" style="max-width:240px">
@@ -89,4 +66,7 @@
 </form>
 <p>横長（縦より横が長い）の写真だけ使えます。JPEG・PNG・WebP、5MBまで。</p>
 {% endif %}
+
+<h2>4. 確認と提出</h2>
+<p><a class="button" href="{{ url_for('releases.view', release_id=release.id) }}">プレビューへ（提出画面に続きます）</a></p>
 {% endblock %}

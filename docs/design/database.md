@@ -231,14 +231,17 @@ stateDiagram-v2
 | --- | --- | --- | --- |
 | id | 整数 | ○ | 主キー |
 | user_id | 整数 | ○ | → users.id（CASCADE）、インデックス |
-| title | 文字列(200) | ○ | タイトル（「【取材のお願い】」の後ろ。全角22文字以内） |
+| title | 文字列(200) | ○ | タイトル（「【取材のお願い】」の後ろ。全角22文字以内）。**管理者が決める**（クライアントは入力しない）。空でも提出できるが、承認には要る |
+| subtitle | 文字列(200) | | サブタイトル。AI がまとめ、管理者が直す |
+| speakers | テキスト | | 当日の対応者（1行に1人、肩書と名前）。AI がまとめ、管理者が直す |
+| title_candidates | テキスト | | AI が出したタイトルの案（1行に1つ。2〜3個）。管理者が選ぶ |
 | event_date | 日付 | | 取材会の日付（提出時は必須） |
 | event_start_time / event_end_time | 時刻 | | 開始・終了時刻（終了は任意） |
 | location | 文字列(300) | ○ | 場所 |
-| service_description | テキスト | ○ | サービスや商品の概要 |
+| service_description | テキスト | ○ | AI がチャットで集めた「サービスや商品の内容」。**画面には出さず**、管理者が確かめる材料にする（Word には載せない） |
 | feature_1 / feature_2 / feature_3 | 文字列(200) | ○ | 特徴（空文字で「なし」） |
-| application_method | テキスト | ○ | 取材の申込方法 |
-| application_deadline_at | 日時 | | 申込の締切 |
+| application_method | テキスト | ○ | （使わない）取材の申込方法。記者は申し込みを嫌うため、聞かない・載せない。過去のデータのために、列だけ残す |
+| application_deadline_at | 日時 | | （使わない）申込の締切。列だけ残す |
 | source_what / source_why / source_message | テキスト | ○ | 要旨の元になる3つの質問の答え（各500文字まで） |
 | summary | テキスト | | 要旨（前文）。管理者が書く。空だと承認できない |
 | summary_source | 文字列(20) | ○ | `manual` / `ai_assisted` |
@@ -266,7 +269,9 @@ stateDiagram-v2
 | size_bytes | 整数 | ○ | 大きさ |
 | created_at | 日時 | ○ | |
 
-### 5-5. release_schedule_items（当日のスケジュール）
+### 5-5. release_schedule_items（当日のスケジュール。現在は使わない）
+
+画面にも Word にも出さない（当日の流れは、要旨と、日時・会場の説明で伝える）。過去のデータのために、テーブルだけ残す。
 
 | 列 | 型 | 必須 | 制約・メモ |
 | --- | --- | --- | --- |

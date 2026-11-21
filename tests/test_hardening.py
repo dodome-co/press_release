@@ -151,9 +151,9 @@ def test_edit_after_submission_is_refused(app, client, client_user):
     stale_copy = db.session.get(Release, release.id)
     client.post(f"/releases/{release.id}/submit")  # 別のタブで提出
     with pytest.raises(service.ReleaseError):
-        service.update_fields(stale_copy, {"title": "提出後に書き換え"})
+        service.update_fields(stale_copy, {"location": "提出後に書き換え"})
     db.session.refresh(release)
-    assert release.title == FULL["title"]
+    assert release.location == FULL["location"]
 
 
 # ---- 制御文字 ----
@@ -166,9 +166,10 @@ def test_clean_text():
 def test_control_characters_removed_when_saving(client, client_user):
     login(client, "client@example.com")
     release = _new_release(client)
-    _save(client, release, title="タイトル\x01\x02", service_description="概要\x00です")
+    _save(client, release)
+    client.post(f"/releases/{release.id}/edit", data={"location": "会場\x01\x02です"})
     db.session.refresh(release)
-    assert release.title == "タイトル" and release.service_description == "概要です"
+    assert release.location == "会場です"
 
 
 def test_control_characters_do_not_break_word_ampersands(app, client_user):
@@ -313,63 +314,64 @@ def test_display_width():
     assert display_width(None) == 0
 
 
-def test_title_of_22_fullwidth_chars_is_accepted(client, client_user):
-    login(client, "client@example.com")
-    release = _new_release(client)
+@pytest.fixture()
+def admin_edit(app, client_user, admin_user):
+    """管理者の画面で、承認待ちの書類のタイトルを保存する（タイトルは、管理者が決める）。"""
+    release = _pending_release(client_user)
+    c = app.test_client()
+    login(c, "admin@example.com")
+
+    def edit(title):
+        return c.post(f"/admin/releases/{release.id}", data=_edit_data(title=title))
+
+    edit.release = release
+    return edit
+
+
+def test_title_of_22_fullwidth_chars_is_accepted(admin_edit):
     title = "あ" * 22
-    assert _save(client, release, title=title).status_code == 302
-    db.session.refresh(release)
-    assert release.title == title
+    assert admin_edit(title).status_code == 302
+    db.session.refresh(admin_edit.release)
+    assert admin_edit.release.title == title
 
 
-def test_title_of_23_fullwidth_chars_is_rejected(client, client_user):
-    login(client, "client@example.com")
-    release = _new_release(client)
-    res = _save(client, release, title="あ" * 23)
+def test_title_of_23_fullwidth_chars_is_rejected(admin_edit):
+    res = admin_edit("あ" * 23)
     assert res.status_code == 200
     assert "全角22文字以内" in res.get_data(as_text=True)
+    db.session.refresh(admin_edit.release)
+    assert admin_edit.release.title == FULL["title"]  # 変わらない
+
+
+def test_halfwidth_chars_count_as_half(admin_edit):
+    assert admin_edit("a" * 44).status_code == 302  # 半角44文字 = 全角22文字
+    assert admin_edit("a" * 45).status_code == 200  # 超えると拒否
+
+
+def test_mixed_title_boundary(admin_edit):
+    assert admin_edit("あ" * 21 + "ab").status_code == 302  # 21 + 1 = 22
+    assert admin_edit("あ" * 21 + "abc").status_code == 200  # 22.5
+
+
+def test_service_also_guards_title(app, client_user, admin_user):
+    release = _pending_release(client_user)
+    with pytest.raises(service.ReleaseError, match="全角22文字"):
+        service.admin_update(release, admin_user, {"title": "あ" * 23}, "要旨")
+
+
+def test_client_cannot_set_the_title(client, client_user):
+    """タイトルは、管理者が決める。クライアントのフォームでは、変えられない。"""
+    login(client, "client@example.com")
+    release = _new_release(client)
+    client.post(f"/releases/{release.id}/edit", data={"location": "会場", "title": "勝手なタイトル"})
     db.session.refresh(release)
     assert release.title == ""
 
 
-def test_halfwidth_chars_count_as_half(client, client_user):
-    login(client, "client@example.com")
-    release = _new_release(client)
-    assert _save(client, release, title="a" * 44).status_code == 302  # 半角44文字 = 全角22文字
-    assert _save(client, release, title="a" * 45).status_code == 200  # 超えると拒否
-
-
-def test_mixed_title_boundary(client, client_user):
-    login(client, "client@example.com")
-    release = _new_release(client)
-    assert _save(client, release, title="あ" * 21 + "ab").status_code == 302  # 21 + 1 = 22
-    assert _save(client, release, title="あ" * 21 + "abc").status_code == 200  # 22.5
-
-
-def test_service_also_guards_title(app, client_user):
-    release = Release(user_id=client_user.id)
-    db.session.add(release)
-    db.session.commit()
-    with pytest.raises(service.ReleaseError, match="全角22文字"):
-        service.update_fields(release, {"title": "あ" * 23})
-
-
-def test_admin_cannot_set_too_long_title(app, client_user, admin_user):
-    release = _pending_release(client_user)
-    c = app.test_client()
-    login(c, "admin@example.com")
-    res = c.post(f"/admin/releases/{release.id}", data=_edit_data(title="あ" * 23))
-    assert res.status_code == 200
-    db.session.refresh(release)
-    assert release.title == FULL["title"]
-
-
-def test_title_limit_is_configurable(client, client_user, app):
+def test_title_limit_is_configurable(admin_edit, app):
     app.config["TITLE_MAX_WIDTH"] = 10
-    login(client, "client@example.com")
-    release = _new_release(client)
-    assert _save(client, release, title="あ" * 11).status_code == 200
-    assert _save(client, release, title="あ" * 10).status_code == 302
+    assert admin_edit("あ" * 11).status_code == 200
+    assert admin_edit("あ" * 10).status_code == 302
 
 
 # ---- 写真は横長だけ（ロゴは対象外） ----

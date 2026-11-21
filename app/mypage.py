@@ -1,11 +1,11 @@
-"""クライアントのマイページ：注文履歴と注文詳細、納品物のダウンロード。"""
+"""クライアントのマイページ：承認されたプレスリリース、注文履歴と注文詳細、納品物のダウンロード。"""
 from flask import Blueprint, abort, redirect, render_template, send_file, url_for
 from flask_login import current_user, login_required
 
 from . import uploads
 from .auth.decorators import client_required
 from .extensions import db
-from .models import Order
+from .models import RELEASE_APPROVED, Order, Release
 from .orders import management
 
 bp = Blueprint("mypage", __name__, url_prefix="/mypage")
@@ -27,7 +27,12 @@ def index():
     recent = (
         Order.query.filter_by(user_id=current_user.id).order_by(Order.created_at.desc(), Order.id.desc()).limit(5).all()
     )
-    return render_template("mypage/index.html", recent_orders=recent)
+    approved = (
+        Release.query.filter_by(user_id=current_user.id, status=RELEASE_APPROVED)
+        .order_by(Release.approved_at.desc(), Release.id.desc())
+        .all()
+    )
+    return render_template("mypage/index.html", recent_orders=recent, approved_releases=approved)
 
 
 @bp.get("/orders")

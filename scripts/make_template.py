@@ -51,6 +51,9 @@ para("{{ company_name }}", align=WD_ALIGN_PARAGRAPH.RIGHT)
 
 para("報道関係者各位", space_after=8)
 para("【取材のお願い】{{ title }}", bold=True, size=15, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=8)
+para("{%p if subtitle %}")
+para("～{{ subtitle }}～", bold=True, size=12, align=WD_ALIGN_PARAGRAPH.CENTER, space_after=8)
+para("{%p endif %}")
 para("{{ summary }}", space_after=10)
 
 para("■ 取材のご案内", bold=True, size=12, space_after=6)
@@ -59,35 +62,19 @@ para("◆ 日時・会場", bold=True)
 para("日時：{{ event_at }}", space_after=0)
 para("会場：{{ location }}", space_after=8)
 
-para("{%p if schedule %}")
-para("◆ 当日のスケジュール", bold=True)
-table = doc.add_table(rows=3, cols=2)
-table.style = "Table Grid"
-table.rows[0].cells[0].text = "時間"
-table.rows[0].cells[1].text = "内容"
-for cell in table.rows[0].cells:
-    for run in cell.paragraphs[0].runs:
-        run.bold = True
-table.rows[1].cells[0].text = "{%tr for item in schedule %}"
-table.rows[1].cells[1].text = ""
-# docxtpl の行の繰り返し：開始の行、中身の行、終了の行
-table.rows[2].cells[0].text = "{{ item.time }}"
-table.rows[2].cells[1].text = "{{ item.content }}"
-end_row = table.add_row()
-end_row.cells[0].text = "{%tr endfor %}"
-end_row.cells[1].text = ""
+para("{%p if speakers %}")
+para("◆ 当日の対応者", bold=True)
+para("{%p for s in speakers %}")
+para("{{ s }}", space_after=0)
+para("{%p endfor %}")
 para("{%p endif %}")
 
-para("◆ サービスの内容", bold=True)
-para("{{ service_description }}")
+para("{%p if features %}")
+para("◆ 商品の特徴", bold=True)
 para("{%p for f in features %}")
 para("・{{ f }}", space_after=0)
 para("{%p endfor %}")
-
-para("◆ 取材のお申し込み", bold=True)
-para("方法：{{ application_method }}", space_after=0)
-para("締切：{{ application_deadline }}", space_after=4)
-para("※お申し込み後にご来場が難しくなった場合は、お問い合わせ先までご連絡ください。", space_after=8)
+para("{%p endif %}")
 
 para("◆ 会社概要", bold=True)
 para("{%p for row in company_rows %}")

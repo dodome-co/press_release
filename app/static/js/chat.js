@@ -15,16 +15,19 @@
     li.className = "chat-" + role;
     li.textContent = text;
     log.appendChild(li);
-    li.scrollIntoView({ block: "nearest" });
+    log.scrollTop = log.scrollHeight;
   }
 
-  function fill(filled) {
-    // AI がまとめた内容を、下の入力欄にも入れる（保存は、サーバーで済んでいる）
-    Object.keys(filled || {}).forEach(function (name) {
-      var field = document.getElementById(name);
-      if (field) field.value = filled[name];
-    });
-  }
+  // Enter で送信、Shift+Enter で改行（日本語の変換中の Enter は、送信しない）
+  input.addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  // 開いたときに、いちばん新しい発言まで、スクロールする
+  log.scrollTop = log.scrollHeight;
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();
@@ -60,12 +63,9 @@
         }
         add("ai", result.data.reply);
         if (remaining) remaining.textContent = result.data.remaining;
-        if (result.data.complete) {
-          fill(result.data.filled);
-          status.textContent = "下の欄に、内容を入れました。確かめて、直したいところがあれば直してください。";
-        } else {
-          status.textContent = "";
-        }
+        status.textContent = result.data.complete
+          ? "AI が、プレスリリースの内容をまとめました。写真を追加して、いちばん下の「プレビューへ」に進んでください。"
+          : "";
       })
       .catch(function () {
         log.removeChild(log.lastElementChild);

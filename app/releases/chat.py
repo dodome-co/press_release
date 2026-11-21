@@ -11,7 +11,15 @@ from flask import current_app
 
 from .. import ai
 from ..extensions import db
-from ..models import CHAT_INPUT_TEXT, CHAT_INPUT_VOICE, CHAT_ROLE_AI, CHAT_ROLE_CLIENT, AIChatMessage, Release
+from ..models import (
+    CHAT_INPUT_TEXT,
+    CHAT_INPUT_VOICE,
+    CHAT_ROLE_AI,
+    CHAT_ROLE_CLIENT,
+    SUMMARY_AI_ASSISTED,
+    AIChatMessage,
+    Release,
+)
 from . import service
 
 
@@ -46,6 +54,9 @@ def _context(release: Release) -> dict:
     }
 
 
+PHOTO_PROMPT = (
+    "最後に、この取り組みに関連する写真を、下の「写真」の欄からアップロードしてください（横長の写真を、2枚まで）。"
+)
 WEEKEND_CHECK = "平日の方が好まれますが、どうしますか"
 
 
@@ -115,30 +126,38 @@ def send(release: Release, text: str, input_method: str = CHAT_INPUT_TEXT) -> di
         if not result.reply:
             raise ChatError("AI の返事が空でした。もう一度送ってください。", 503)
 
+    composed = None
+    if result.complete:
+        try:
+            composed = ai.compose(_context(release), history + [(CHAT_ROLE_AI, result.reply)])
+        except ai.AIError as e:
+            raise ChatError(str(e), 503) from e
     try:
         service._lock_editable(release)  # AI を呼んでいる間に、提出などで状態が変わっていないか
     except service.ReleaseError as e:
         raise ChatError(str(e), 409) from e
     db.session.add(AIChatMessage(release_id=release.id, role=CHAT_ROLE_CLIENT, content=text,
                                  input_method=input_method))
-    db.session.add(AIChatMessage(release_id=release.id, role=CHAT_ROLE_AI, content=result.reply,
-                                 input_method=CHAT_INPUT_TEXT))
-    filled = {}
+    ai_message = AIChatMessage(release_id=release.id, role=CHAT_ROLE_AI, content=result.reply,
+                               input_method=CHAT_INPUT_TEXT)
+    db.session.add(ai_message)
     if result.complete:
-        # 段階1：そろった情報を、今ある入力欄に入れる（段階2で、AI のまとめに置き換える）
-        filled = {
-            "service_description": _fit(result.service),
-            "source_what": _fit(result.what),
-            "source_why": _fit(result.why),
-            "source_message": _fit(result.message),
-        }
-        for name, value in filled.items():
-            setattr(release, name, value)
+        # 聞き取りが終わった：集めた情報を保存し、AI が、タイトルの案・サブタイトル・特徴・要旨などをまとめる
+        reply = result.reply + "\n\n" + PHOTO_PROMPT
+        ai_message.content = reply
+        release.service_description = _fit(result.service)
+        release.source_what = _fit(result.what)
+        release.source_why = _fit(result.why)
+        release.source_message = _fit(result.message)
+        release.title_candidates = "\n".join(composed.titles)
+        release.subtitle = composed.subtitle
+        release.summary = composed.summary
+        release.summary_source = SUMMARY_AI_ASSISTED
+        release.speakers = composed.speakers
+        features = (composed.features + ["", "", ""])[:3]
+        release.feature_1, release.feature_2, release.feature_3 = features
+    else:
+        reply = result.reply
     db.session.commit()
     db.session.refresh(release)
-    return {
-        "reply": result.reply,
-        "complete": result.complete,
-        "filled": filled,
-        "remaining": remaining_calls(release),
-    }
+    return {"reply": reply, "complete": result.complete, "remaining": remaining_calls(release)}

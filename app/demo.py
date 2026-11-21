@@ -16,6 +16,7 @@ from werkzeug.datastructures import FileStorage
 from . import docgen, uploads
 from .extensions import db
 from .models import (
+    AIChatMessage,
     MailLog,
     Order,
     OrderRefund,
@@ -163,12 +164,28 @@ def _release(user: User, admin: User, *, approved: bool, title: str, days_ago: i
         source_what="新シリーズの試食会を、取材してほしい",
         source_why="地元の素材を使った商品で、地域の農家と、観光の活性化につなげたい",
         source_message="伝統の味を、若い世代にも届けたい",
+        summary=(
+            f"{user.company_name}は、地元の栗と岩手産の米粉を使った新しい和菓子のシリーズを発売するにあたり、試食会を開催します。"
+            "これまで出荷できなかった栗を、地域の農家と連携して生かします。ぜひ、取材いただきますようご案内申し上げます。"
+        ),
+        subtitle="地元の栗と米粉で、新しい和菓子のシリーズ。試食会を報道公開",
+        speakers=f"{user.company_name}　代表取締役社長　岩手　盛子\n栗生産者　花巻　賢治",
+        title_candidates="\n".join((title, "いわて栗ようかん、地元素材で新登場", "地元の栗を生かした新菓子を発売")),
+        summary_source="ai_assisted",
         status="pending",
         first_submitted_at=submitted,
         submitted_at=submitted,
     )
     db.session.add(release)
     db.session.flush()
+    for role, text in (
+        ("ai", "はじめまして。プレスリリースづくりを、お手伝いします。まず、取材してほしいサービスや商品について、どんなものか教えてください。"),
+        ("client", "地元の栗と岩手産の米粉を使った、新しい和菓子のシリーズを発売します。"),
+        ("ai", "ありがとうございます。形の悪い栗を生かしているなど、地域とのつながりはありますか。"),
+        ("client", "地域の農家と連携して、これまで出荷できなかった栗を使っています。当日は、生産者も来ます。"),
+        ("ai", "必要な情報がそろいました。\n\n最後に、この取り組みに関連する写真を、下の「写真」の欄からアップロードしてください（横長の写真を、2枚まで）。"),
+    ):
+        db.session.add(AIChatMessage(release_id=release.id, role=role, content=text))
     for position, (time_text, content) in enumerate(
         (("14:00〜14:20", "開発の背景のご説明"), ("14:20〜15:00", "試食会"), ("15:00〜15:30", "質疑応答・個別取材")), start=1
     ):
@@ -183,10 +200,6 @@ def _release(user: User, admin: User, *, approved: bool, title: str, days_ago: i
                                     size_bytes=saved.size_bytes))
     db.session.commit()
     if approved:
-        release.summary = (
-            f"{user.company_name}は、地元の素材を使った新しい和菓子のシリーズを発売するにあたり、試食会を開催します。"
-            "地域の農家と連携した取り組みで、伝統の味を次の世代へつなぐ試みです。ぜひ、取材いただきますようご案内申し上げます。"
-        )
         release.approved_by = admin.id
         release.approved_at = utcnow() - timedelta(days=days_ago - 1)
         release.status = "approved"
