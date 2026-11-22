@@ -99,6 +99,16 @@ def create_app(config_name: str | None = None) -> Flask:
     app.register_blueprint(admin_users_bp)
     app.register_blueprint(mypage_bp)
 
+    @app.url_defaults
+    def add_static_version(endpoint, values):
+        """静的ファイル（CSS・画像・JS）の URL に、更新日時を付ける。変えたファイルを、ブラウザが古いまま使い続けない（Nginx は 7日間キャッシュする）。"""
+        if endpoint != "static" or "v" in values or not values.get("filename"):
+            return
+        try:
+            values["v"] = int(os.stat(os.path.join(app.static_folder, values["filename"])).st_mtime)
+        except (OSError, ValueError):
+            pass
+
     STATUS_LABELS = {"draft": "下書き", "pending": "承認待ち", "approved": "承認済み", "rejected": "差し戻し"}
     @app.context_processor
     def inject_logo():
