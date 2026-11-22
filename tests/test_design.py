@@ -74,17 +74,17 @@ def test_stylesheet_has_styles_for_what_the_templates_use():
 # ---- すべての画面が、スタイルシートを読み込む ----
 def test_public_pages_link_the_stylesheet(client):
     for path in ("/", "/about", "/services", "/login", "/register", "/password/reset"):
-        assert 'href="/static/css/style.css"' in client.get(path).get_data(as_text=True), path
+        assert 'href="/static/css/style.css?v=' in client.get(path).get_data(as_text=True), path
 
 
 def test_client_and_admin_pages_link_the_stylesheet(client, client_user, app, admin_user):
     login(client, "client@example.com")
     for path in ("/mypage/", "/releases/", "/guide", "/mypage/profile", "/mypage/orders", "/mypage/service"):
-        assert 'href="/static/css/style.css"' in client.get(path).get_data(as_text=True), path
+        assert 'href="/static/css/style.css?v=' in client.get(path).get_data(as_text=True), path
     admin = app.test_client()
     login(admin, "admin@example.com")
     for path in ("/admin/", "/admin/releases", "/admin/orders", "/admin/users", "/admin/services"):
-        assert 'href="/static/css/style.css"' in admin.get(path).get_data(as_text=True), path
+        assert 'href="/static/css/style.css?v=' in admin.get(path).get_data(as_text=True), path
 
 
 def test_error_pages_still_render(client):
@@ -127,7 +127,7 @@ def test_demo_banner_uses_a_class_not_inline_style(client, app):
 def test_netamoto_logo_is_shown_in_the_header_by_default(client):
     body = client.get("/").get_data(as_text=True)
     header = body[body.index('class="brand"'):body.index("</a>", body.index('class="brand"'))]
-    assert '<img src="/static/img/logo.webp" alt="ねたもと。">' in header and "プレスリリース支援" in header
+    assert re.search(r'<img src="/static/img/logo\.webp\?v=\d+" alt="ねたもと。">', header) and "プレスリリース支援" in header
 
 
 def test_logo_file_exists_and_is_served(client):
@@ -167,7 +167,7 @@ def test_logo_appears_when_a_file_is_placed(app, client, tmp_path, ext):
     (static / "img" / f"logo.{ext}").write_bytes(b"x")
     app.static_folder = str(static)
     body = client.get("/").get_data(as_text=True)
-    assert f'<img src="/static/img/logo.{ext}"' in body
+    assert re.search(rf'<img src="/static/img/logo\.{ext}(\?v=\d+)?"', body)
 
 
 def test_logo_does_not_break_pages_when_missing(app, client, tmp_path):
@@ -186,3 +186,11 @@ def test_static_files_are_cacheable_but_pages_are_not_for_logged_in_users(client
     assert "no-store" not in client.get("/static/css/style.css").headers.get("Cache-Control", "")
     assert "no-store" not in client.get("/static/img/logo.webp").headers.get("Cache-Control", "")
     assert "no-store" in client.get("/mypage/").headers["Cache-Control"]
+
+
+def test_static_urls_have_a_version_so_browsers_do_not_keep_old_files(client):
+    """Nginx は /static/ を 7日間キャッシュする。ファイルを変えたら URL が変わるよう、更新日時を付ける。"""
+    import re
+
+    body = client.get("/").get_data(as_text=True)
+    assert re.search(r'/static/css/style\.css\?v=\d+', body) and re.search(r'/static/img/logo\.webp\?v=\d+', body)
